@@ -1,16 +1,21 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
+export type SubjectDocument = Subject & Document;
+
 @Schema()
-export class Subject extends Document {
+export class Subject {
   @Prop({ required: true })
-  subjectName: string;
+  name: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'School', required: true })
-  schoolId: Types.ObjectId;
+  @Prop()
+  description: string;
 
-  @Prop({ default: true })
-  isActive: boolean;
+  @Prop({ type: Types.ObjectId, ref: 'Class', required: true })
+  classId: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'Teacher', required: true })
+  teacherId: Types.ObjectId;
 }
 
 export const SubjectSchema = SchemaFactory.createForClass(Subject);

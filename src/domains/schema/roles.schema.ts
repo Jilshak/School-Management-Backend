@@ -1,19 +1,13 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document } from 'mongoose';
 
 @Schema()
 export class Role extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'Class', required: true })
-  classId: Types.ObjectId;
+  @Prop({ required: true, unique: true })
+  name: string;
 
-  @Prop({ type: [Types.ObjectId], ref: 'Subject', required: true })
-  subjects: Types.ObjectId[];
-
-  @Prop({
-    type: Map,
-    of: [{ subjectId: Types.ObjectId, teacherId: Types.ObjectId, period: Number }],
-  })
-  days: Map<string, { subjectId: Types.ObjectId; teacherId: Types.ObjectId; period: number }[]>;
+  @Prop({ type: [String], required: true })
+  permissions: string[];
 }
 
 export const RoleSchema = SchemaFactory.createForClass(Role);
