@@ -1,34 +1,34 @@
-import { IsNotEmpty, IsMongoId, IsNumber, IsDate } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsNotEmpty, IsString, IsNumber, IsDateString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class CreatePayrollDto {
+  @ApiProperty({ description: 'The ID of the employee', required: true })
   @IsNotEmpty()
-  @IsMongoId()
+  @IsString()
   employeeId: string;
 
+  @ApiProperty({ description: 'The payroll period start date', required: true })
   @IsNotEmpty()
-  @IsDate()
-  @Type(() => Date)
-  payPeriodStart: Date;
+  @IsDateString()
+  periodStart: Date;
 
+  @ApiProperty({ description: 'The payroll period end date', required: true })
   @IsNotEmpty()
-  @IsDate()
-  @Type(() => Date)
-  payPeriodEnd: Date;
+  @IsDateString()
+  periodEnd: Date;
 
+  @ApiProperty({ description: 'The base salary amount', required: true })
   @IsNotEmpty()
   @IsNumber()
-  basicSalary: number;
+  baseSalary: number;
 
+  @ApiProperty({ description: 'Any additional allowances', required: true })
   @IsNotEmpty()
   @IsNumber()
   allowances: number;
 
+  @ApiProperty({ description: 'Any deductions from the salary', required: true })
   @IsNotEmpty()
   @IsNumber()
   deductions: number;
-
-  @IsNotEmpty()
-  @IsNumber()
-  netSalary: number;
 }

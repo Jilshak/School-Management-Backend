@@ -1,16 +1,20 @@
-import { IsNotEmpty, IsMongoId, IsDate, IsArray, ValidateNested } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, IsDate, IsArray } from 'class-validator';
 import { Type } from 'class-transformer';
 
-class ExamScheduleDto {
+class ExamScheduleItem {
+  @ApiProperty({ description: 'The exam ID' })
   @IsNotEmpty()
-  @IsMongoId()
+  @IsString()
   examId: string;
 
+  @ApiProperty({ description: 'The start time of the exam' })
   @IsNotEmpty()
   @IsDate()
   @Type(() => Date)
   startTime: Date;
 
+  @ApiProperty({ description: 'The end time of the exam' })
   @IsNotEmpty()
   @IsDate()
   @Type(() => Date)
@@ -18,12 +22,18 @@ class ExamScheduleDto {
 }
 
 export class CreateExamTimeTableDto {
+  @ApiProperty({ description: 'The name of the exam time table' })
   @IsNotEmpty()
-  @IsMongoId()
+  @IsString()
+  name: string;
+
+  @ApiProperty({ description: 'The class or batch ID' })
+  @IsNotEmpty()
+  @IsString()
   classId: string;
 
+  @ApiProperty({ description: 'The exam schedule', type: [ExamScheduleItem] })
   @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => ExamScheduleDto)
-  schedule: ExamScheduleDto[];
+  @Type(() => ExamScheduleItem)
+  schedule: ExamScheduleItem[];
 }

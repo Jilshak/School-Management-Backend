@@ -1,47 +1,36 @@
-import { IsNotEmpty, IsString, IsDate, IsEnum, IsOptional } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, IsEmail, IsDate, IsOptional } from 'class-validator';
 import { Type } from 'class-transformer';
 
-enum Gender {
-  MALE = 'male',
-  FEMALE = 'female',
-  OTHER = 'other'
-}
-
 export class CreateStudentDto {
+  @ApiProperty({ description: 'The name of the student' })
   @IsNotEmpty()
   @IsString()
-  firstName: string;
+  name: string;
 
+  @ApiProperty({ description: 'The email of the student' })
   @IsNotEmpty()
-  @IsString()
-  lastName: string;
+  @IsEmail()
+  email: string;
 
+  @ApiProperty({ description: 'The date of birth of the student' })
   @IsNotEmpty()
   @IsDate()
   @Type(() => Date)
   dateOfBirth: Date;
 
-  @IsNotEmpty()
-  @IsEnum(Gender)
-  gender: Gender;
-
+  @ApiProperty({ description: 'The class of the student' })
   @IsNotEmpty()
   @IsString()
-  email: string;
+  class: string;
 
-  @IsNotEmpty()
-  @IsString()
-  phone: string;
-
-  @IsNotEmpty()
-  @IsString()
-  address: string;
-
+  @ApiProperty({ description: 'The name of the student\'s parent', required: false })
   @IsOptional()
   @IsString()
-  guardianName?: string;
+  parentName?: string;
 
+  @ApiProperty({ description: 'The address of the student', required: false })
   @IsOptional()
   @IsString()
-  guardianPhone?: string;
+  address?: string;
 }

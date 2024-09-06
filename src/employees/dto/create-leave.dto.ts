@@ -1,25 +1,24 @@
-import { IsNotEmpty, IsDate, IsMongoId, IsString } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsNotEmpty, IsString, IsDateString } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateLeaveDto {
+  @ApiProperty({ description: 'The ID of the employee', required: true })
   @IsNotEmpty()
-  @IsMongoId()
+  @IsString()
   employeeId: string;
 
+  @ApiProperty({ description: 'The start date of the leave', required: true })
   @IsNotEmpty()
-  @IsDate()
-  @Type(() => Date)
+  @IsDateString()
   startDate: Date;
 
+  @ApiProperty({ description: 'The end date of the leave', required: true })
   @IsNotEmpty()
-  @IsDate()
-  @Type(() => Date)
+  @IsDateString()
   endDate: Date;
 
+  @ApiProperty({ description: 'The reason for the leave', required: true })
   @IsNotEmpty()
   @IsString()
   reason: string;
-
-  @IsNotEmpty()
-  status: 'pending' | 'approved' | 'rejected';
 }

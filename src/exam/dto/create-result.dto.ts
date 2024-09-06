@@ -1,21 +1,25 @@
-import { IsNotEmpty, IsMongoId, IsNumber, Min, Max } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, IsNumber, Min, Max } from 'class-validator';
 
 export class CreateResultDto {
+  @ApiProperty({ description: 'The ID of the student' })
   @IsNotEmpty()
-  @IsMongoId()
-  examId: string;
-
-  @IsNotEmpty()
-  @IsMongoId()
+  @IsString()
   studentId: string;
 
+  @ApiProperty({ description: 'The ID of the exam' })
+  @IsNotEmpty()
+  @IsString()
+  examId: string;
+
+  @ApiProperty({ description: 'The score obtained by the student', minimum: 0, maximum: 100 })
   @IsNotEmpty()
   @IsNumber()
   @Min(0)
   @Max(100)
   score: number;
 
-  @IsNotEmpty()
-  @IsMongoId()
-  gradedBy: string; // Teacher/Employee ID
+  @ApiProperty({ description: 'Any remarks about the result' })
+  @IsString()
+  remarks: string;
 }

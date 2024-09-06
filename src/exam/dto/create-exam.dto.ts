@@ -1,4 +1,5 @@
-import { IsNotEmpty, IsString, IsDate, IsMongoId, IsEnum, IsOptional } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, IsDate, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum ExamType {
@@ -7,32 +8,29 @@ export enum ExamType {
 }
 
 export class CreateExamDto {
+  @ApiProperty({ description: 'The name of the exam' })
   @IsNotEmpty()
   @IsString()
   name: string;
 
+  @ApiProperty({ description: 'The subject ID of the exam' })
+  @IsNotEmpty()
+  @IsString()
+  subjectId: string;
+
+  @ApiProperty({ description: 'The date of the exam' })
   @IsNotEmpty()
   @IsDate()
   @Type(() => Date)
   date: Date;
 
-  @IsNotEmpty()
-  @IsMongoId()
-  subjectId: string;
-
-  @IsNotEmpty()
-  @IsMongoId()
-  classId: string;
-
+  @ApiProperty({ description: 'The type of the exam', enum: ExamType })
   @IsNotEmpty()
   @IsEnum(ExamType)
   type: ExamType;
 
+  @ApiProperty({ description: 'The duration of the exam in minutes' })
   @IsNotEmpty()
-  @IsString()
-  duration: string;
-
-  @IsOptional()
-  @IsString()
-  description?: string;
+  @Type(() => Number)
+  duration: number;
 }

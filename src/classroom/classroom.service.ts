@@ -3,11 +3,11 @@ import { InjectModel, InjectConnection } from '@nestjs/mongoose';
 import { Model, Connection } from 'mongoose';
 import { Classroom, ClassroomDocument } from '../domains/schema/classroom.schema';
 import { Subject, SubjectDocument } from '../domains/schema/subject.schema';
-import { TimeTable, TimeTableDocument } from '../domains/schema/timetable.schema'; // Fixed import
+import { TimeTable, TimeTableDocument } from '../domains/schema/timetable.schema';
 import { Attendance, AttendanceDocument } from '../domains/schema/attendance.schema';
 import { Syllabus, SyllabusDocument } from '../domains/schema/syllabus.schema';
 import { StudyMaterial, StudyMaterialDocument } from '../domains/schema/study-material.schema';
-import { Result, ResultDocument } from '../domains/schema/result.schema'; // Added import for Result
+import { Result, ResultDocument } from '../domains/schema/result.schema';
 import { CreateClassroomDto } from './dto/create-classroom.dto';
 import { UpdateClassroomDto } from './dto/update-classroom.dto';
 import { CreateSubjectDto } from './dto/create-subject.dto';
@@ -25,7 +25,7 @@ export class ClassroomService {
     @InjectModel(Attendance.name) private attendanceModel: Model<AttendanceDocument>,
     @InjectModel(Syllabus.name) private syllabusModel: Model<SyllabusDocument>,
     @InjectModel(StudyMaterial.name) private studyMaterialModel: Model<StudyMaterialDocument>,
-    @InjectModel(Result.name) private resultModel: Model<ResultDocument>, // Added Result model
+    @InjectModel(Result.name) private resultModel: Model<ResultDocument>,
     @InjectConnection() private connection: Connection
   ) {}
 
@@ -46,9 +46,16 @@ export class ClassroomService {
     }
   }
 
-  async findAll(): Promise<Classroom[]> {
+  async findAll(page?: number, limit?: number): Promise<Classroom[]> {
     try {
-      return await this.classroomModel.find().exec();
+      let query = this.classroomModel.find();
+      
+      if (page !== undefined && limit !== undefined) {
+        const skip = (page - 1) * limit;
+        query = query.skip(skip).limit(limit);
+      }
+      
+      return await query.exec();
     } catch (error) {
       throw new InternalServerErrorException('Failed to fetch classrooms');
     }
@@ -129,19 +136,37 @@ export class ClassroomService {
     }
   }
 
-  async getTimeTable(): Promise<TimeTable[]> {
+  async getTimeTable(classroomId?: string, date?: string): Promise<TimeTable[]> {
     try {
-      return await this.timeTableModel.find().populate('classroomId').exec();
+      let query = this.timeTableModel.find();
+      
+      if (classroomId) {
+        query = query.where('classroomId').equals(classroomId);
+      }
+      
+      if (date) {
+        const queryDate = new Date(date);
+        query = query.where('date').equals(queryDate);
+      }
+      
+      return await query.populate('classroomId').exec();
     } catch (error) {
       throw new InternalServerErrorException('Failed to fetch time table');
     }
   }
 
-  async getTeacherTimeTable(teacherId: string): Promise<TimeTable[]> {
+  async getTeacherTimeTable(teacherId: string, startDate?: string, endDate?: string): Promise<TimeTable[]> {
     try {
       const subjects = await this.subjectModel.find({ teacherId }).exec();
       const subjectIds = subjects.map(subject => subject._id);
-      return await this.timeTableModel.find({ 'schedule.subjectId': { $in: subjectIds } }).populate('classroomId').exec();
+      
+      let query = this.timeTableModel.find({ 'schedule.subjectId': { $in: subjectIds } });
+      
+      if (startDate && endDate) {
+        query = query.where('date').gte(new Date(startDate).getTime()).lte(new Date(endDate).getTime());
+      }
+      
+      return await query.populate('classroomId').exec();
     } catch (error) {
       throw new InternalServerErrorException('Failed to fetch teacher time table');
     }
@@ -181,23 +206,25 @@ export class ClassroomService {
     }
   }
 
-  async getAttendanceReport(classroomId: string, startDate: Date, endDate: Date): Promise<any> {
+  async getAttendanceReport(classroomId: string, startDate: string, endDate: string): Promise<any> {
     try {
+      const start = new Date(startDate).getTime();
+      const end = new Date(endDate).getTime();
+
       const attendances = await this.attendanceModel.find({
         classroomId,
-        date: { $gte: startDate, $lte: endDate }
+        date: { $gte: start, $lte: end }
       }).populate('studentId').exec();
 
-      // Process attendances to create a report
-      // This is a basic implementation, you might want to customize it based on your needs
       const report = attendances.reduce((acc, attendance) => {
-        if (!acc[attendance.studentId.toString()]) {
-          acc[attendance.studentId.toString()] = { present: 0, absent: 0 };
+        const studentId = attendance.studentId.toString();
+        if (!acc[studentId]) {
+          acc[studentId] = { present: 0, absent: 0 };
         }
         if (attendance.isPresent) {
-          acc[attendance.studentId.toString()].present++;
+          acc[studentId].present++;
         } else {
-          acc[attendance.studentId.toString()].absent++;
+          acc[studentId].absent++;
         }
         return acc;
       }, {});
@@ -224,7 +251,7 @@ export class ClassroomService {
     }
   }
 
-  async getStudentsPerformance(classroomId: string): Promise<any> {
+  async getStudentsPerformance(classroomId: string, subjectId?: string, startDate?: string, endDate?: string): Promise<any> {
     try {
       const classroom = await this.classroomModel.findById(classroomId).populate('students').exec();
       if (!classroom) {
@@ -232,14 +259,23 @@ export class ClassroomService {
       }
 
       const studentIds = classroom.students.map(student => student._id);
-      const results = await this.resultModel.find({ studentId: { $in: studentIds } }).populate('examId').exec();
+      let query = this.resultModel.find({ studentId: { $in: studentIds } });
+      
+      if (subjectId) {
+        query = query.where('subjectId').equals(subjectId);
+      }
+      
+      if (startDate && endDate) {
+        query = query.where('date').gte(new Date(startDate).getTime()).lte(new Date(endDate).getTime());
+      }
+      
+      const results = await query.populate('examId').exec();
 
       // Process results to create a performance report
-      // This is a basic implementation, you might want to customize it based on your needs
       const performanceReport = studentIds.reduce((acc, studentId) => {
         const studentResults = results.filter(result => result.studentId.toString() === studentId.toString());
         acc[studentId.toString()] = {
-          averageScore: studentResults.reduce((sum, result) => sum + result.score, 0) / studentResults.length,
+          averageScore: studentResults.reduce((sum, result) => sum + result.score, 0) / studentResults.length || 0,
           examsTaken: studentResults.length
         };
         return acc;
@@ -303,9 +339,24 @@ export class ClassroomService {
     }
   }
 
-  async getStudyMaterials(): Promise<StudyMaterial[]> {
+  async getStudyMaterials(subjectId?: string, type?: string, page?: number, limit?: number): Promise<StudyMaterial[]> {
     try {
-      return await this.studyMaterialModel.find().exec();
+      let query = this.studyMaterialModel.find();
+      
+      if (subjectId) {
+        query = query.where('subjectId').equals(subjectId);
+      }
+      
+      if (type) {
+        query = query.where('type').equals(type);
+      }
+      
+      if (page !== undefined && limit !== undefined) {
+        const skip = (page - 1) * limit;
+        query = query.skip(skip).limit(limit);
+      }
+      
+      return await query.exec();
     } catch (error) {
       throw new InternalServerErrorException('Failed to fetch study materials');
     }

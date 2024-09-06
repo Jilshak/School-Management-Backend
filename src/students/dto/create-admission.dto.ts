@@ -1,35 +1,26 @@
-import { IsNotEmpty, IsString, IsDate, IsEnum, IsMongoId } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, IsDate, IsOptional } from 'class-validator';
 import { Type } from 'class-transformer';
 
-enum AdmissionStatus {
-  PENDING = 'pending',
-  APPROVED = 'approved',
-  REJECTED = 'rejected'
-}
-
 export class CreateAdmissionDto {
+  @ApiProperty({ description: 'The name of the student' })
   @IsNotEmpty()
-  @IsMongoId()
-  studentId: string;
+  @IsString()
+  studentName: string;
 
-  @IsNotEmpty()
-  @IsMongoId()
-  classId: string;
-
+  @ApiProperty({ description: 'The date of admission' })
   @IsNotEmpty()
   @IsDate()
   @Type(() => Date)
   admissionDate: Date;
 
-  @IsNotEmpty()
-  @IsEnum(AdmissionStatus)
-  status: AdmissionStatus;
-
+  @ApiProperty({ description: 'The class for admission' })
   @IsNotEmpty()
   @IsString()
-  previousSchool: string;
+  class: string;
 
-  @IsNotEmpty()
+  @ApiProperty({ description: 'Any additional remarks', required: false })
+  @IsOptional()
   @IsString()
-  previousGrade: string;
+  remarks?: string;
 }

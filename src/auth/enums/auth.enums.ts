@@ -15,3 +15,10 @@ export enum UserRole {
   STUDENT = '1',
   EMPLOYEE = '2',
 }
+
+export enum EmployeeRole {
+  // Add your enum values here, for example:
+  ADMIN = 'admin',
+  MANAGER = 'manager',
+  EMPLOYEE = 'employee',
+}

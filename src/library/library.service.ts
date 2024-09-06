@@ -9,6 +9,7 @@ import { UpdateBookDto } from './dto/update-book.dto';
 import { LendBookDto } from './dto/lend-book.dto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { CreateFineDto } from './dto/create-fine.dto';
+import { GetBooksDto } from './dto/get-books.dto';
 
 @Injectable()
 export class LibraryService {
@@ -19,8 +20,7 @@ export class LibraryService {
     @InjectConnection() private connection: Connection
   ) {}
 
-  // Manage Books
-  async createBook(createBookDto: CreateBookDto): Promise<Book> {
+  async addBook(createBookDto: CreateBookDto): Promise<Book> {
     const session = await this.connection.startSession();
     session.startTransaction();
 
@@ -31,54 +31,80 @@ export class LibraryService {
       return result;
     } catch (error) {
       await session.abortTransaction();
-      throw new InternalServerErrorException('Failed to create book');
+      throw new InternalServerErrorException('Failed to add book');
     } finally {
       session.endSession();
     }
   }
 
-  async findAllBooks(): Promise<Book[]> {
-    return this.bookModel.find().exec();
+  async getAllBooks(getBooksDto: GetBooksDto): Promise<Book[]> {
+    try {
+      const { title, author, isbn, page = 1, limit = 10 } = getBooksDto;
+      const query = this.bookModel.find();
+
+      if (title) {
+        query.where('title').regex(new RegExp(title, 'i'));
+      }
+      if (author) {
+        query.where('author').regex(new RegExp(author, 'i'));
+      }
+      if (isbn) {
+        query.where('isbn').equals(isbn);
+      }
+
+      const skip = (page - 1) * limit;
+      const books = await query.skip(skip).limit(limit).exec();
+
+      return books;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to fetch books');
+    }
   }
 
-  async findOneBook(id: string): Promise<Book> {
-    const book = await this.bookModel.findById(id).exec();
-    if (!book) {
-      throw new NotFoundException(`Book with ID ${id} not found`);
+  async getBook(id: string): Promise<Book> {
+    try {
+      const book = await this.bookModel.findById(id).exec();
+      if (!book) {
+        throw new NotFoundException(`Book with ID ${id} not found`);
+      }
+      return book;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to fetch book');
     }
-    return book;
   }
 
   async updateBook(id: string, updateBookDto: UpdateBookDto): Promise<Book> {
-    const updatedBook = await this.bookModel.findByIdAndUpdate(id, updateBookDto, { new: true }).exec();
-    if (!updatedBook) {
-      throw new NotFoundException(`Book with ID ${id} not found`);
+    try {
+      const updatedBook = await this.bookModel.findByIdAndUpdate(id, updateBookDto, { new: true }).exec();
+      if (!updatedBook) {
+        throw new NotFoundException(`Book with ID ${id} not found`);
+      }
+      return updatedBook;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to update book');
     }
-    return updatedBook;
   }
 
   async removeBook(id: string): Promise<void> {
-    const result = await this.bookModel.findByIdAndDelete(id).exec();
-    if (!result) {
-      throw new NotFoundException(`Book with ID ${id} not found`);
+    try {
+      const result = await this.bookModel.findByIdAndDelete(id).exec();
+      if (!result) {
+        throw new NotFoundException(`Book with ID ${id} not found`);
+      }
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to remove book');
     }
   }
 
-  // Library Report
-  async getLibraryReport(): Promise<any> {
-    // Implement library report logic
-    const totalBooks = await this.bookModel.countDocuments();
-    const lentBooks = await this.bookModel.countDocuments({ status: 'lent' });
-    const availableBooks = await this.bookModel.countDocuments({ status: 'available' });
-
-    return {
-      totalBooks,
-      lentBooks,
-      availableBooks,
-    };
-  }
-
-  // Lend a Book
   async lendBook(lendBookDto: LendBookDto): Promise<Book> {
     const session = await this.connection.startSession();
     session.startTransaction();
@@ -102,13 +128,29 @@ export class LibraryService {
       return updatedBook;
     } catch (error) {
       await session.abortTransaction();
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
       throw new InternalServerErrorException('Failed to lend book');
     } finally {
       session.endSession();
     }
   }
 
-  // Library Statistics
+  // Additional methods from the previous version
+  async getLibraryReport(): Promise<any> {
+    // Implement library report logic
+    const totalBooks = await this.bookModel.countDocuments();
+    const lentBooks = await this.bookModel.countDocuments({ status: 'lent' });
+    const availableBooks = await this.bookModel.countDocuments({ status: 'available' });
+
+    return {
+      totalBooks,
+      lentBooks,
+      availableBooks,
+    };
+  }
+
   async getLibraryStatistics(): Promise<any> {
     const totalBooks = await this.bookModel.countDocuments();
     const lentBooks = await this.bookModel.countDocuments({ status: 'lent' });
@@ -125,7 +167,6 @@ export class LibraryService {
     };
   }
 
-  // Book Reservation
   async createReservation(createReservationDto: CreateReservationDto): Promise<Reservation> {
     const session = await this.connection.startSession();
     session.startTransaction();
@@ -153,7 +194,6 @@ export class LibraryService {
     return this.reservationModel.find().exec();
   }
 
-  // Fines
   async createFine(createFineDto: CreateFineDto): Promise<Fine> {
     const session = await this.connection.startSession();
     session.startTransaction();
@@ -175,7 +215,6 @@ export class LibraryService {
     return this.fineModel.find().exec();
   }
 
-  // Digital Library
   async getDigitalLibrary(): Promise<Book[]> {
     return this.bookModel.find({ format: 'digital' }).exec();
   }

@@ -1,7 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
-import { Gender } from 'src/auth/enums/auth.enums';
-
+import { Document } from 'mongoose';
+import { EmployeeRole } from 'src/auth/enums/auth.enums';
 
 @Schema()
 export class Employee extends Document {
@@ -11,30 +10,26 @@ export class Employee extends Document {
   @Prop({ required: true })
   lastName: string;
 
-  @Prop({ required: true, enum: Gender })
-  gender: Gender;
-
-  @Prop({ required: true })
-  dateOfBirth: Date;
-
   @Prop({ required: true, unique: true })
   email: string;
 
   @Prop({ required: true })
   mobile: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'School', required: true })
-  schoolId: Types.ObjectId;
+  @Prop({ required: true, enum: EmployeeRole })
+  role: EmployeeRole;
 
-  @Prop({
-    qualification: { type: [String], required: true },
-    certifications: { type: [String], required: false }, 
-    professionalExperience: { type: [String], required: false }, 
-  })
-  qualifications: Record<string, any>;
+  @Prop({ required: true })
+  dateOfBirth: Date;
 
-  @Prop({ default: true })
-  isActive: boolean;
+  @Prop({ required: true })
+  address: string;
+
+  @Prop({ type: [String], required: false })
+  qualifications: string[];
+
+  @Prop({ required: false })
+  experience: string;
 }
 
 export const EmployeeSchema = SchemaFactory.createForClass(Employee);
