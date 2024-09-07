@@ -1,83 +1,78 @@
-import { BadRequestException, Injectable, UnauthorizedException, ConflictException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, InternalServerErrorException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UpdateAuthDto } from './dto/update-auth.dto';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import * as bcrypt from "bcrypt"
-import { signUpDto } from './dto/signup-auth.dto';
-import { User } from 'src/domains/schema/user.schema';
+import { InjectModel, InjectConnection } from '@nestjs/mongoose';
+import { Model, Connection } from 'mongoose';
+import { User } from '../domains/schema/user.schema';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
   constructor(
-    @InjectModel(User.name) private UserModel: Model<User>,
-    private jwtService: JwtService
+    @InjectModel(User.name) private userModel: Model<User>,
+    private jwtService: JwtService,
+    @InjectConnection() private connection: Connection
   ) {}
 
-  async signUp(signUpData: signUpDto): Promise<User> {
-    const { email, password, name, isActive, schoolId, roleId, userType } = signUpData;
-
+  private async supportsTransactions(): Promise<boolean> {
     try {
-      // Check if user already exists
-      const existingUser = await this.UserModel.findOne({ email });
-      if (existingUser) {
-        throw new ConflictException('User already exists');
-      }
-
-      // Hash the password
-      const salt = await bcrypt.genSalt();
-      const hashedPassword = await bcrypt.hash(password, salt);
-
-      // Create new user
-      const user = new this.UserModel({
-        email,
-        password: hashedPassword,
-        name,
-        isActive,
-        schoolId,
-        roleId,
-        userType
-      });
-
-      return await user.save();
-    } catch (error) {
-      if (error instanceof ConflictException) {
-        throw error;
-      }
-      throw new InternalServerErrorException('Failed to create user');
+      await this.connection.db.admin().command({ replSetGetStatus: 1 });
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 
-  async signIn(email: string, password: string) {
-    const user = await this.UserModel.findOne({ email });
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+  async validateUser(email: string, password: string): Promise<any> {
+    const user = await this.userModel.findOne({ email });
+    if (user && await bcrypt.compare(password, user.password)) {
+      const { password, ...result } = user.toObject();
+      return result;
     }
+    return null;
+  }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const payload = { sub: user._id, email: user.email };
+  async login(user: any) {
+    const payload = { email: user.email, sub: user._id };
     return {
       access_token: this.jwtService.sign(payload),
     };
   }
 
-  findAll() {
-    return `This action returns all auth`;
-  }
+  async signUp(email: string, password: string): Promise<User> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
 
-  findOne(id: number) {
-    return `This action returns a #${id} auth`;
-  }
+      const existingUser = await this.userModel.findOne({ email }).session(session);
+      if (existingUser) {
+        throw new UnauthorizedException('Email already in use');
+      }
 
-  update(id: number, updateAuthDto: UpdateAuthDto) {
-    return `This action updates a #${id} auth`;
-  }
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const newUser = new this.userModel({ email, password: hashedPassword });
+      const result = await newUser.save({ session });
 
-  remove(id: number) {
-    return `This action removes a #${id} auth`;
+      if (session) {
+        await session.commitTransaction();
+      }
+      return result;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to sign up');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
   }
 }

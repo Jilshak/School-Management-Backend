@@ -12,20 +12,41 @@ export class ClassesService {
     @InjectConnection() private connection: Connection
   ) {}
 
-  async create(createClassDto: CreateClassDto): Promise<Class> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+  private async supportsTransactions(): Promise<boolean> {
     try {
+      await this.connection.db.admin().command({ replSetGetStatus: 1 });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async create(createClassDto: CreateClassDto): Promise<Class> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const createdClass = new this.classModel(createClassDto);
       const result = await createdClass.save({ session });
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return result;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to create class');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 

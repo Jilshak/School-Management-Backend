@@ -10,7 +10,6 @@ import { Roles } from '../auth/decorators/roles.decorator';
 @ApiTags('school-type')
 @ApiBearerAuth()
 @Controller('school-type')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class SchoolTypeController {
   constructor(private readonly schoolTypeService: SchoolTypeService) {}
 
@@ -19,6 +18,7 @@ export class SchoolTypeController {
   @ApiOperation({ summary: 'Create a new school type' })
   @ApiResponse({ status: 201, description: 'The school type has been successfully created.' })
   create(@Body() createSchoolTypeDto: CreateSchoolTypeDto) {
+    console.log(createSchoolTypeDto)
     return this.schoolTypeService.create(createSchoolTypeDto);
   }
 

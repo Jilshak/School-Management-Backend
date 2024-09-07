@@ -29,116 +29,220 @@ export class ClassroomService {
     @InjectConnection() private connection: Connection
   ) {}
 
-  async create(createClassroomDto: CreateClassroomDto): Promise<Classroom> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+  private async supportsTransactions(): Promise<boolean> {
     try {
+      await this.connection.db.admin().command({ replSetGetStatus: 1 });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async create(createClassroomDto: CreateClassroomDto): Promise<Classroom> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const createdClassroom = new this.classroomModel(createClassroomDto);
       const result = await createdClassroom.save({ session });
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return result;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to create classroom');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async findAll(page?: number, limit?: number): Promise<Classroom[]> {
+    let session = null;
     try {
-      let query = this.classroomModel.find();
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      let query = this.classroomModel.find().session(session);
       
       if (page !== undefined && limit !== undefined) {
         const skip = (page - 1) * limit;
         query = query.skip(skip).limit(limit);
       }
       
-      return await query.exec();
+      const classrooms = await query.exec();
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return classrooms;
     } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to fetch classrooms');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async findOne(id: string): Promise<Classroom> {
+    let session = null;
     try {
-      const classroom = await this.classroomModel.findById(id).exec();
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const classroom = await this.classroomModel.findById(id).session(session).exec();
       if (!classroom) {
         throw new NotFoundException(`Classroom with ID ${id} not found`);
       }
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return classroom;
     } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to fetch classroom');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async update(id: string, updateClassroomDto: UpdateClassroomDto): Promise<Classroom> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const updatedClassroom = await this.classroomModel.findByIdAndUpdate(id, updateClassroomDto, { new: true, session }).exec();
       if (!updatedClassroom) {
         throw new NotFoundException(`Classroom with ID ${id} not found`);
       }
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return updatedClassroom;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to update classroom');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async remove(id: string): Promise<void> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const result = await this.classroomModel.findByIdAndDelete(id).session(session).exec();
       if (!result) {
         throw new NotFoundException(`Classroom with ID ${id} not found`);
       }
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to remove classroom');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async createSubject(createSubjectDto: CreateSubjectDto): Promise<Subject> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const createdSubject = new this.subjectModel(createSubjectDto);
       const result = await createdSubject.save({ session });
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return result;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to create subject');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async getTimeTable(classroomId?: string, date?: string): Promise<TimeTable[]> {
+    let session = null;
     try {
-      let query = this.timeTableModel.find();
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      let query = this.timeTableModel.find().session(session);
       
       if (classroomId) {
         query = query.where('classroomId').equals(classroomId);
@@ -149,72 +253,133 @@ export class ClassroomService {
         query = query.where('date').equals(queryDate);
       }
       
-      return await query.populate('classroomId').exec();
+      const timeTables = await query.populate('classroomId').exec();
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return timeTables;
     } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to fetch time table');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async getTeacherTimeTable(teacherId: string, startDate?: string, endDate?: string): Promise<TimeTable[]> {
+    let session = null;
     try {
-      const subjects = await this.subjectModel.find({ teacherId }).exec();
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const subjects = await this.subjectModel.find({ teacherId }).session(session).exec();
       const subjectIds = subjects.map(subject => subject._id);
       
-      let query = this.timeTableModel.find({ 'schedule.subjectId': { $in: subjectIds } });
+      let query = this.timeTableModel.find({ 'schedule.subjectId': { $in: subjectIds } }).session(session);
       
       if (startDate && endDate) {
         query = query.where('date').gte(new Date(startDate).getTime()).lte(new Date(endDate).getTime());
       }
       
-      return await query.populate('classroomId').exec();
+      const result = await query.populate('classroomId').exec();
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return result;
     } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to fetch teacher time table');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async createTimeTable(createTimeTableDto: CreateTimeTableDto): Promise<TimeTable> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const createdTimeTable = new this.timeTableModel(createTimeTableDto);
       const result = await createdTimeTable.save({ session });
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return result;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to create time table');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async createAttendance(createAttendanceDto: CreateAttendanceDto): Promise<Attendance> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const createdAttendance = new this.attendanceModel(createAttendanceDto);
       const result = await createdAttendance.save({ session });
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return result;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to create attendance');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async getAttendanceReport(classroomId: string, startDate: string, endDate: string): Promise<any> {
+    let session = null;
     try {
-      const start = new Date(startDate).getTime();
-      const end = new Date(endDate).getTime();
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
 
       const attendances = await this.attendanceModel.find({
         classroomId,
-        date: { $gte: start, $lte: end }
-      }).populate('studentId').exec();
+        date: { $gte: new Date(startDate), $lte: new Date(endDate) }
+      }).session(session).populate('studentId').exec();
 
       const report = attendances.reduce((acc, attendance) => {
         const studentId = attendance.studentId.toString();
@@ -229,37 +394,202 @@ export class ClassroomService {
         return acc;
       }, {});
 
+      if (session) {
+        await session.commitTransaction();
+      }
       return report;
     } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to generate attendance report');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async takeAttendance(takeAttendanceDto: CreateAttendanceDto[]): Promise<Attendance[]> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const attendances = await this.attendanceModel.create(takeAttendanceDto, { session });
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return attendances;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to take attendance');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async getSyllabus(subjectId: string): Promise<Syllabus> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const syllabus = await this.syllabusModel.findOne({ subjectId }).session(session).exec();
+      if (!syllabus) {
+        throw new NotFoundException(`Syllabus for subject with ID ${subjectId} not found`);
+      }
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return syllabus;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to fetch syllabus');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async manageSyllabus(createSyllabusDto: CreateSyllabusDto): Promise<Syllabus> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const createdSyllabus = new this.syllabusModel(createSyllabusDto);
+      const result = await createdSyllabus.save({ session });
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return result;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      throw new InternalServerErrorException('Failed to manage syllabus');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async createStudyMaterial(createStudyMaterialDto: CreateStudyMaterialDto): Promise<StudyMaterial> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const createdStudyMaterial = new this.studyMaterialModel(createStudyMaterialDto);
+      const result = await createdStudyMaterial.save({ session });
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return result;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      throw new InternalServerErrorException('Failed to create study material');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async getStudyMaterials(subjectId?: string, type?: string, page?: number, limit?: number): Promise<StudyMaterial[]> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      let query = this.studyMaterialModel.find().session(session);
+      
+      if (subjectId) {
+        query = query.where('subjectId').equals(subjectId);
+      }
+      
+      if (type) {
+        query = query.where('type').equals(type);
+      }
+      
+      if (page !== undefined && limit !== undefined) {
+        const skip = (page - 1) * limit;
+        query = query.skip(skip).limit(limit);
+      }
+      
+      const result = await query.exec();
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return result;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      throw new InternalServerErrorException('Failed to fetch study materials');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async getStudentsPerformance(classroomId: string, subjectId?: string, startDate?: string, endDate?: string): Promise<any> {
+    let session = null;
     try {
-      const classroom = await this.classroomModel.findById(classroomId).populate('students').exec();
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const classroom = await this.classroomModel.findById(classroomId).populate('students').session(session).exec();
       if (!classroom) {
         throw new NotFoundException(`Classroom with ID ${classroomId} not found`);
       }
 
       const studentIds = classroom.students.map(student => student._id);
-      let query = this.resultModel.find({ studentId: { $in: studentIds } });
+      let query = this.resultModel.find({ studentId: { $in: studentIds } }).session(session);
       
       if (subjectId) {
         query = query.where('subjectId').equals(subjectId);
@@ -281,84 +611,22 @@ export class ClassroomService {
         return acc;
       }, {});
 
+      if (session) {
+        await session.commitTransaction();
+      }
       return performanceReport;
     } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to fetch students performance');
-    }
-  }
-
-  async getSyllabus(subjectId: string): Promise<Syllabus> {
-    try {
-      const syllabus = await this.syllabusModel.findOne({ subjectId }).exec();
-      if (!syllabus) {
-        throw new NotFoundException(`Syllabus for subject with ID ${subjectId} not found`);
-      }
-      return syllabus;
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new InternalServerErrorException('Failed to fetch syllabus');
-    }
-  }
-
-  async manageSyllabus(manageSyllabusDto: CreateSyllabusDto): Promise<Syllabus> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
-    try {
-      const createdSyllabus = new this.syllabusModel(manageSyllabusDto);
-      const result = await createdSyllabus.save({ session });
-      await session.commitTransaction();
-      return result;
-    } catch (error) {
-      await session.abortTransaction();
-      throw new InternalServerErrorException('Failed to manage syllabus');
     } finally {
-      session.endSession();
-    }
-  }
-
-  async createStudyMaterial(createStudyMaterialDto: CreateStudyMaterialDto): Promise<StudyMaterial> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
-    try {
-      const createdStudyMaterial = new this.studyMaterialModel(createStudyMaterialDto);
-      const result = await createdStudyMaterial.save({ session });
-      await session.commitTransaction();
-      return result;
-    } catch (error) {
-      await session.abortTransaction();
-      throw new InternalServerErrorException('Failed to create study material');
-    } finally {
-      session.endSession();
-    }
-  }
-
-  async getStudyMaterials(subjectId?: string, type?: string, page?: number, limit?: number): Promise<StudyMaterial[]> {
-    try {
-      let query = this.studyMaterialModel.find();
-      
-      if (subjectId) {
-        query = query.where('subjectId').equals(subjectId);
+      if (session) {
+        session.endSession();
       }
-      
-      if (type) {
-        query = query.where('type').equals(type);
-      }
-      
-      if (page !== undefined && limit !== undefined) {
-        const skip = (page - 1) * limit;
-        query = query.skip(skip).limit(limit);
-      }
-      
-      return await query.exec();
-    } catch (error) {
-      throw new InternalServerErrorException('Failed to fetch study materials');
     }
   }
 }

@@ -20,27 +20,56 @@ export class LibraryService {
     @InjectConnection() private connection: Connection
   ) {}
 
-  async addBook(createBookDto: CreateBookDto): Promise<Book> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+  private async supportsTransactions(): Promise<boolean> {
     try {
+      await this.connection.db.admin().command({ replSetGetStatus: 1 });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async addBook(createBookDto: CreateBookDto): Promise<Book> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const createdBook = new this.bookModel(createBookDto);
       const result = await createdBook.save({ session });
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return result;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to add book');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async getAllBooks(getBooksDto: GetBooksDto): Promise<Book[]> {
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const { title, author, isbn, page = 1, limit = 10 } = getBooksDto;
-      const query = this.bookModel.find();
+      const query = this.bookModel.find().session(session);
 
       if (title) {
         query.where('title').regex(new RegExp(title, 'i'));
@@ -55,62 +84,137 @@ export class LibraryService {
       const skip = (page - 1) * limit;
       const books = await query.skip(skip).limit(limit).exec();
 
+      if (session) {
+        await session.commitTransaction();
+      }
+
       return books;
     } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to fetch books');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async getBook(id: string): Promise<Book> {
+    let session = null;
     try {
-      const book = await this.bookModel.findById(id).exec();
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const book = await this.bookModel.findById(id).session(session).exec();
       if (!book) {
         throw new NotFoundException(`Book with ID ${id} not found`);
       }
+
+      if (session) {
+        await session.commitTransaction();
+      }
+
       return book;
     } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to fetch book');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async updateBook(id: string, updateBookDto: UpdateBookDto): Promise<Book> {
+    let session = null;
     try {
-      const updatedBook = await this.bookModel.findByIdAndUpdate(id, updateBookDto, { new: true }).exec();
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const updatedBook = await this.bookModel.findByIdAndUpdate(id, updateBookDto, { new: true }).session(session).exec();
       if (!updatedBook) {
         throw new NotFoundException(`Book with ID ${id} not found`);
       }
+
+      if (session) {
+        await session.commitTransaction();
+      }
+
       return updatedBook;
     } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to update book');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async removeBook(id: string): Promise<void> {
+    let session = null;
     try {
-      const result = await this.bookModel.findByIdAndDelete(id).exec();
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const result = await this.bookModel.findByIdAndDelete(id).session(session).exec();
       if (!result) {
         throw new NotFoundException(`Book with ID ${id} not found`);
       }
+
+      if (session) {
+        await session.commitTransaction();
+      }
     } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to remove book');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async lendBook(lendBookDto: LendBookDto): Promise<Book> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
-      const book = await this.bookModel.findById(lendBookDto.bookId).session(session);
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const book = await this.bookModel.findById(lendBookDto.bookId).session(session).exec();
       if (!book) {
         throw new NotFoundException(`Book with ID ${lendBookDto.bookId} not found`);
       }
@@ -137,18 +241,39 @@ export class LibraryService {
     }
   }
 
-  // Additional methods from the previous version
   async getLibraryReport(): Promise<any> {
-    // Implement library report logic
-    const totalBooks = await this.bookModel.countDocuments();
-    const lentBooks = await this.bookModel.countDocuments({ status: 'lent' });
-    const availableBooks = await this.bookModel.countDocuments({ status: 'available' });
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
 
-    return {
-      totalBooks,
-      lentBooks,
-      availableBooks,
-    };
+      const totalBooks = await this.bookModel.countDocuments().session(session);
+      const lentBooks = await this.bookModel.countDocuments({ status: 'lent' }).session(session);
+      const availableBooks = await this.bookModel.countDocuments({ status: 'available' }).session(session);
+
+      if (session) {
+        await session.commitTransaction();
+      }
+
+      return {
+        totalBooks,
+        lentBooks,
+        availableBooks,
+      };
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      throw new InternalServerErrorException('Failed to generate library report');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
   }
 
   async getLibraryStatistics(): Promise<any> {
@@ -168,11 +293,16 @@ export class LibraryService {
   }
 
   async createReservation(createReservationDto: CreateReservationDto): Promise<Reservation> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
-      const book = await this.bookModel.findById(createReservationDto.bookId).session(session);
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const book = await this.bookModel.findById(createReservationDto.bookId).session(session).exec();
       if (!book) {
         throw new NotFoundException(`Book with ID ${createReservationDto.bookId} not found`);
       }
@@ -195,10 +325,15 @@ export class LibraryService {
   }
 
   async createFine(createFineDto: CreateFineDto): Promise<Fine> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const fine = new this.fineModel(createFineDto);
       const result = await fine.save({ session });
       await session.commitTransaction();

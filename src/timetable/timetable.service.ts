@@ -12,66 +12,116 @@ export class TimetableService {
     @InjectConnection() private connection: Connection
   ) {}
 
-  async create(createTimetableDto: CreateTimetableDto): Promise<TimeTable> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+  private async supportsTransactions(): Promise<boolean> {
     try {
+      await this.connection.db.admin().command({ replSetGetStatus: 1 });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async create(createTimetableDto: CreateTimetableDto): Promise<TimeTable> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const createdTimetable = new this.timetableModel(createTimetableDto);
       const result = await createdTimetable.save({ session });
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return result;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to create timetable');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async findAll(): Promise<TimeTable[]> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const timetables = await this.timetableModel.find().session(session).exec();
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return timetables;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to fetch timetables');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async findOne(id: string): Promise<TimeTable> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const timetable = await this.timetableModel.findById(id).session(session).exec();
       if (!timetable) {
         throw new NotFoundException(`Timetable with ID ${id} not found`);
       }
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return timetable;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to fetch timetable');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async update(id: string, updateTimetableDto: UpdateTimetableDto): Promise<TimeTable> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const updatedTimetable = await this.timetableModel.findByIdAndUpdate(
         id, 
         updateTimetableDto, 
@@ -80,37 +130,56 @@ export class TimetableService {
       if (!updatedTimetable) {
         throw new NotFoundException(`Timetable with ID ${id} not found`);
       }
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return updatedTimetable;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to update timetable');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async remove(id: string): Promise<void> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const result = await this.timetableModel.findByIdAndDelete(id).session(session).exec();
       if (!result) {
         throw new NotFoundException(`Timetable with ID ${id} not found`);
       }
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to remove timetable');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 }

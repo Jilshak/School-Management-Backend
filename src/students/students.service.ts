@@ -15,200 +15,329 @@ export class StudentsService {
     @InjectConnection() private connection: Connection
   ) {}
 
-  async create(createStudentDto: CreateStudentDto): Promise<Student> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+  private async supportsTransactions(): Promise<boolean> {
     try {
+      await this.connection.db.admin().command({ replSetGetStatus: 1 });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async create(createStudentDto: CreateStudentDto): Promise<Student> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const createdStudent = new this.studentModel(createStudentDto);
       const result = await createdStudent.save({ session });
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return result;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to create student');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async findAll(): Promise<Student[]> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const students = await this.studentModel.find().session(session).exec();
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return students;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to fetch students');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async findOne(id: string): Promise<Student> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const student = await this.studentModel.findById(id).session(session).exec();
       if (!student) {
         throw new NotFoundException(`Student with ID ${id} not found`);
       }
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return student;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to fetch student');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async update(id: string, updateStudentDto: UpdateStudentDto): Promise<Student> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const updatedStudent = await this.studentModel.findByIdAndUpdate(id, updateStudentDto, { new: true, session }).exec();
       if (!updatedStudent) {
         throw new NotFoundException(`Student with ID ${id} not found`);
       }
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return updatedStudent;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to update student');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async remove(id: string): Promise<void> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const result = await this.studentModel.findByIdAndDelete(id).session(session).exec();
       if (!result) {
         throw new NotFoundException(`Student with ID ${id} not found`);
       }
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to remove student');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
-  // Admission
+  // Admission methods
   async createAdmission(createAdmissionDto: CreateAdmissionDto): Promise<Admission> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const createdAdmission = new this.admissionModel(createAdmissionDto);
       const result = await createdAdmission.save({ session });
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return result;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to create admission');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async findAllAdmissions(): Promise<Admission[]> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const admissions = await this.admissionModel.find().session(session).exec();
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return admissions;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to fetch admissions');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async findOneAdmission(id: string): Promise<Admission> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const admission = await this.admissionModel.findById(id).session(session).exec();
       if (!admission) {
         throw new NotFoundException(`Admission with ID ${id} not found`);
       }
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return admission;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to fetch admission');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async updateAdmission(id: string, updateAdmissionDto: CreateAdmissionDto): Promise<Admission> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const updatedAdmission = await this.admissionModel.findByIdAndUpdate(id, updateAdmissionDto, { new: true, session }).exec();
       if (!updatedAdmission) {
         throw new NotFoundException(`Admission with ID ${id} not found`);
       }
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return updatedAdmission;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to update admission');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async removeAdmission(id: string): Promise<void> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+    let session = null;
     try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const result = await this.admissionModel.findByIdAndDelete(id).session(session).exec();
       if (!result) {
         throw new NotFoundException(`Admission with ID ${id} not found`);
       }
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to remove admission');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 }

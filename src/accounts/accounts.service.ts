@@ -12,72 +12,170 @@ export class AccountsService {
     @InjectConnection() private connection: Connection
   ) {}
 
-  async create(createAccountDto: CreateAccountDto): Promise<Account> {
-    const session = await this.connection.startSession();
-    session.startTransaction();
-
+  private async supportsTransactions(): Promise<boolean> {
     try {
+      await this.connection.db.admin().command({ replSetGetStatus: 1 });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async create(createAccountDto: CreateAccountDto): Promise<Account> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
       const createdAccount = new this.accountModel(createAccountDto);
       const result = await createdAccount.save({ session });
-      await session.commitTransaction();
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return result;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to create account');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async findAll(): Promise<Account[]> {
+    let session = null;
     try {
-      return await this.accountModel.find().exec();
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const accounts = await this.accountModel.find().session(session).exec();
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return accounts;
     } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to fetch accounts');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async findOne(id: string): Promise<Account> {
+    let session = null;
     try {
-      const account = await this.accountModel.findById(id).exec();
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const account = await this.accountModel.findById(id).session(session).exec();
       if (!account) {
         throw new NotFoundException(`Account with ID ${id} not found`);
       }
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return account;
     } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to fetch account');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async update(id: string, updateAccountDto: UpdateAccountDto): Promise<Account> {
+    let session = null;
     try {
-      const updatedAccount = await this.accountModel.findByIdAndUpdate(id, updateAccountDto, { new: true }).exec();
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const updatedAccount = await this.accountModel.findByIdAndUpdate(id, updateAccountDto, { new: true, session }).exec();
       if (!updatedAccount) {
         throw new NotFoundException(`Account with ID ${id} not found`);
       }
+
+      if (session) {
+        await session.commitTransaction();
+      }
       return updatedAccount;
     } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to update account');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
   async remove(id: string): Promise<void> {
+    let session = null;
     try {
-      const result = await this.accountModel.findByIdAndDelete(id).exec();
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const result = await this.accountModel.findByIdAndDelete(id).session(session).exec();
       if (!result) {
         throw new NotFoundException(`Account with ID ${id} not found`);
       }
+
+      if (session) {
+        await session.commitTransaction();
+      }
     } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
       if (error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to remove account');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
     }
   }
 }
