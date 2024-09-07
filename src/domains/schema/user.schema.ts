@@ -10,26 +10,20 @@ export class User extends Document {
   @Prop({ required: true })
   password: string;
 
-  @Prop({ required: true, enum: UserRole })
-  role: UserRole;
+  @Prop({ required: true })
+  name: string;
 
   @Prop({ required: true })
-  userType: string;
-
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Student' })
-  studentId: MongooseSchema.Types.ObjectId;
-
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Employee' })
-  employeeId: MongooseSchema.Types.ObjectId;
-
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Role', required: true })
-  roleId: MongooseSchema.Types.ObjectId;
+  isActive: boolean;
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'School', required: true })
   schoolId: MongooseSchema.Types.ObjectId;
 
-  @Prop({ required: true })
-  isActive: boolean;
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Role', required: true })
+  roleId: MongooseSchema.Types.ObjectId;
+
+  @Prop({ required: true, enum: UserRole })
+  userType: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

@@ -17,30 +17,33 @@ export class AuthService {
   async signUp(signUpData: signUpDto): Promise<User> {
     const { email, password, name, isActive, schoolId, roleId, userType } = signUpData;
 
-    // Check if user already exists
-    const existingUser = await this.UserModel.findOne({ email });
-    if (existingUser) {
-      throw new ConflictException('User already exists');
-    }
-
-    // Hash the password
-    const salt = await bcrypt.genSalt();
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // Create new user
-    const user = new this.UserModel({
-      email,
-      password: hashedPassword,
-      name,
-      isActive,
-      schoolId,
-      roleId,
-      userType
-    });
-
     try {
+      // Check if user already exists
+      const existingUser = await this.UserModel.findOne({ email });
+      if (existingUser) {
+        throw new ConflictException('User already exists');
+      }
+
+      // Hash the password
+      const salt = await bcrypt.genSalt();
+      const hashedPassword = await bcrypt.hash(password, salt);
+
+      // Create new user
+      const user = new this.UserModel({
+        email,
+        password: hashedPassword,
+        name,
+        isActive,
+        schoolId,
+        roleId,
+        userType
+      });
+
       return await user.save();
     } catch (error) {
+      if (error instanceof ConflictException) {
+        throw error;
+      }
       throw new InternalServerErrorException('Failed to create user');
     }
   }
