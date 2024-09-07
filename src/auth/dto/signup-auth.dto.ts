@@ -42,8 +42,4 @@ export class signUpDto {
   @ApiProperty({ enum: ['student', 'teacher', 'admin'], description: 'The type of user' })
   @IsEnum(['student', 'teacher', 'admin'])
   userType: string;
-
-  @ApiProperty({ enum: UserRole, description: 'The role of the user' })
-  @IsEnum(UserRole)
-  role: UserRole;
 }
