@@ -1,9 +1,9 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException, ConflictException, InternalServerErrorException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UpdateAuthDto } from './dto/update-auth.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import * as  bcrypt from "bcrypt"
+import * as bcrypt from "bcrypt"
 import { signUpDto } from './dto/signup-auth.dto';
 import { User } from 'src/domains/schema/user.schema';
 
@@ -14,30 +14,34 @@ export class AuthService {
     private jwtService: JwtService
   ) {}
 
-  async signUp(signUpData: signUpDto) {
+  async signUp(signUpData: signUpDto): Promise<User> {
+    const { email, password, name, isActive, schoolId, roleId, userType } = signUpData;
+
+    // Check if user already exists
+    const existingUser = await this.UserModel.findOne({ email });
+    if (existingUser) {
+      throw new ConflictException('User already exists');
+    }
+
+    // Hash the password
+    const salt = await bcrypt.genSalt();
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create new user
+    const user = new this.UserModel({
+      email,
+      password: hashedPassword,
+      name,
+      isActive,
+      schoolId,
+      roleId,
+      userType
+    });
+
     try {
-      const { email, password, name, isActive, schoolId, roleId, userType, role } = signUpData;
-      const emailInUse = await this.UserModel.findOne({
-        email: email,
-      });
-      if (emailInUse) {
-        throw new BadRequestException("Email Already In Use");
-      }
-
-      const hashPassword = await bcrypt.hash(password, 10);
-
-      await this.UserModel.create({
-        name,
-        email,
-        password: hashPassword,
-        isActive,
-        schoolId,
-        roleId,
-        userType,
-        role,
-      });
+      return await user.save();
     } catch (error) {
-      throw error;
+      throw new InternalServerErrorException('Failed to create user');
     }
   }
 
