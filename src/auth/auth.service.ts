@@ -16,21 +16,26 @@ export class AuthService {
 
   async signUp(signUpData: signUpDto) {
     try {
-      const {email, password, name} = signUpData
+      const { email, password, name, isActive, schoolId, roleId, userType, role } = signUpData;
       const emailInUse = await this.UserModel.findOne({
         email: email,
       });
-      if (emailInUse){
-        throw new BadRequestException("Email Already In Use")
+      if (emailInUse) {
+        throw new BadRequestException("Email Already In Use");
       }
 
-      const hashPassword = await bcrypt.hash(password, 10)
+      const hashPassword = await bcrypt.hash(password, 10);
 
       await this.UserModel.create({
         name,
         email,
-        password: hashPassword
-      })
+        password: hashPassword,
+        isActive,
+        schoolId,
+        roleId,
+        userType,
+        role,
+      });
     } catch (error) {
       throw error;
     }
