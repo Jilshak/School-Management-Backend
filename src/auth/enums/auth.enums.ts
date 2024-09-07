@@ -5,8 +5,9 @@ export enum Gender {
 }
 
 export enum UserRole {
-  STUDENT = '1',
-  EMPLOYEE = '2',
+  STUDENT = 'student',
+  EMPLOYEE = 'employee',
+  ADMIN = 'admin'
 }
 
 export enum EmployeeRole {

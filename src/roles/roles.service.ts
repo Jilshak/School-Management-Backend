@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
-import { Model, Connection } from 'mongoose';
+import { Model, Connection, Schema as MongooseSchema } from 'mongoose';
 import { Role } from 'src/domains/schema/roles.schema';
 import { User } from 'src/domains/schema/user.schema';
 import { CreateRoleDto } from './dto/create-role.dto';
@@ -169,18 +169,18 @@ export class RolesService {
 
     try {
       const { userId, roleId } = assignRoleDto;
-      const user = await this.userModel.findById(userId).session(session);
-      const role = await this.roleModel.findById(roleId).session(session);
 
+      const user = await this.userModel.findById(userId).session(session);
       if (!user) {
         throw new NotFoundException(`User with ID ${userId} not found`);
       }
 
+      const role = await this.roleModel.findById(roleId).session(session);
       if (!role) {
         throw new NotFoundException(`Role with ID ${roleId} not found`);
       }
 
-      user.roleId = roleId;
+      user.roleId = new MongooseSchema.Types.ObjectId(roleId);
       const updatedUser = await user.save({ session });
 
       await session.commitTransaction();

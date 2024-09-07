@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
-import { Model, Connection } from 'mongoose';
+import { Model, Connection, Types } from 'mongoose';
 import { User } from '../domains/schema/user.schema';
 import { Student } from '../domains/schema/students.schema';
 import { Staff } from '../domains/schema/staff.schema';
@@ -26,7 +26,11 @@ export class UserService {
     session.startTransaction();
 
     try {
-      const createdUser = new this.userModel(createUserDto);
+      const createdUser = new this.userModel({
+        ...createUserDto,
+        roleId: new Types.ObjectId(createUserDto.roleId),
+        schoolId: new Types.ObjectId(createUserDto.schoolId),
+      });
       const result = await createdUser.save({ session });
       await session.commitTransaction();
       return result;

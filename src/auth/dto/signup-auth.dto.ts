@@ -1,5 +1,7 @@
-import { IsEmail, IsString, Matches, MinLength, IsBoolean, IsEnum } from 'class-validator';
+import { IsEmail, IsString, Matches, MinLength, IsBoolean, IsEnum, IsMongoId } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { UserRole } from '../enums/auth.enums';
+import { ObjectId } from 'mongoose';
 
 export class signUpDto {
   @ApiProperty({ example: 'John Doe', description: 'The name of the user' })
@@ -30,18 +32,18 @@ export class signUpDto {
   isActive: boolean;
 
   @ApiProperty({ example: '5f8d0d55d3f6c346c4a92dfa', description: 'The ID of the school the user belongs to' })
-  @IsString()
-  schoolId: string;
+  @IsMongoId()
+  schoolId: ObjectId;
 
   @ApiProperty({ example: '5f8d0d55d3f6c346c4a92dfb', description: 'The ID of the role assigned to the user' })
-  @IsString()
-  roleId: string;
+  @IsMongoId()
+  roleId: ObjectId;
 
   @ApiProperty({ enum: ['student', 'teacher', 'admin'], description: 'The type of user' })
   @IsEnum(['student', 'teacher', 'admin'])
   userType: string;
 
-  @ApiProperty({ enum: ['student', 'teacher', 'admin'], description: 'The role of the user' })
-  @IsEnum(['student', 'teacher', 'admin'])
-  role: string;
+  @ApiProperty({ enum: UserRole, description: 'The role of the user' })
+  @IsEnum(UserRole)
+  role: UserRole;
 }

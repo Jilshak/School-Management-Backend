@@ -1,8 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Schema as MongooseSchema } from 'mongoose';
 import { UserRole } from 'src/auth/enums/auth.enums';
-
-
 
 @Schema()
 export class User extends Document {
@@ -13,22 +11,22 @@ export class User extends Document {
   password: string;
 
   @Prop({ required: true, enum: UserRole })
-  role: string;
+  role: UserRole;
 
   @Prop({ required: true })
   userType: string;
 
-  @Prop()
-  studentId: string;
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Student' })
+  studentId: MongooseSchema.Types.ObjectId;
 
-  @Prop()
-  employeeId: string;
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Employee' })
+  employeeId: MongooseSchema.Types.ObjectId;
 
-  @Prop({ required: true })
-  roleId: string;
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Role', required: true })
+  roleId: MongooseSchema.Types.ObjectId;
 
-  @Prop({ required: true })
-  schoolId: string;
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'School', required: true })
+  schoolId: MongooseSchema.Types.ObjectId;
 
   @Prop({ required: true })
   isActive: boolean;

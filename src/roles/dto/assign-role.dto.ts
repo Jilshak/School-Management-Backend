@@ -1,14 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsMongoId } from 'class-validator';
 
 export class AssignRoleDto {
-  @ApiProperty({ description: 'The ID of the user to assign the role to' })
-  @IsNotEmpty()
-  @IsString()
+  @ApiProperty({ description: 'The ID of the user' })
+  @IsMongoId()
   userId: string;
 
-  @ApiProperty({ description: 'The ID of the role to be assigned' })
-  @IsNotEmpty()
-  @IsString()
+  @ApiProperty({ description: 'The ID of the role to assign' })
+  @IsMongoId()
   roleId: string;
 }
