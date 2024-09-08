@@ -42,7 +42,6 @@ export class UserService {
 
       const createdUser = new this.userModel({
         ...createUserDto,
-        roleId: new Types.ObjectId(createUserDto.roleId),
         schoolId: new Types.ObjectId(createUserDto.schoolId),
       });
       const result = await createdUser.save({ session });

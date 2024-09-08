@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
-import { Model, Connection, Types, Schema as MongooseSchema } from 'mongoose';
+import { Model, Connection, Types } from 'mongoose';
 import { Role } from 'src/domains/schema/roles.schema';
 import { User } from 'src/domains/schema/user.schema';
+import { UserRole } from 'src/domains/enums/user-roles.enum';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { CreatePermissionDto } from './dto/create-permission.dto';
@@ -282,7 +283,7 @@ export class RolesService {
         throw new NotFoundException(`Role with ID ${roleId} not found`);
       }
 
-      user.roleId = new MongooseSchema.Types.ObjectId(roleId);
+      user.role = role.name as UserRole; // Assuming role.name matches UserRole enum
       const updatedUser = await user.save({ session });
 
       if (session) {
@@ -324,7 +325,7 @@ export class RolesService {
         throw new NotFoundException(`Role with ID ${roleId} not found`);
       }
 
-      user.roleId = new MongooseSchema.Types.ObjectId(roleId);
+      user.role = role.name as UserRole; // Assuming role.name matches UserRole enum
       const updatedUser = await user.save({ session });
 
       if (session) {

@@ -6,7 +6,8 @@ import { User, UserSchema } from '../domains/schema/user.schema';
 import { Student, StudentSchema } from '../domains/schema/students.schema';
 import { Staff, StaffSchema } from '../domains/schema/staff.schema';
 import { Admission, AdmissionSchema } from '../domains/schema/admission.schema';
-import { RolesGuard } from '../shared/guards/roles.guard';
+import { School, SchoolSchema } from '../domains/schema/school.schema';
+import { SchoolType, SchoolTypeSchema } from '../domains/schema/school-type.schema';
 
 @Module({
   imports: [
@@ -15,9 +16,12 @@ import { RolesGuard } from '../shared/guards/roles.guard';
       { name: Student.name, schema: StudentSchema },
       { name: Staff.name, schema: StaffSchema },
       { name: Admission.name, schema: AdmissionSchema },
+      { name: School.name, schema: SchoolSchema },
+      { name: SchoolType.name, schema: SchoolTypeSchema },
     ]),
   ],
   controllers: [UserController],
-  providers: [UserService, RolesGuard],
+  providers: [UserService],
+  exports: [UserService],
 })
 export class UserModule {}

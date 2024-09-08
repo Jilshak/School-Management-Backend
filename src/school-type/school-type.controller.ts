@@ -10,6 +10,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 @ApiTags('school-type')
 @ApiBearerAuth()
 @Controller('school-type')
+// @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class SchoolTypeController {
   constructor(private readonly schoolTypeService: SchoolTypeService) {}
 
