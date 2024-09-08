@@ -11,12 +11,12 @@ import { User } from '../domains/schema/user.schema';
 @ApiTags('users')
 @ApiBearerAuth()
 @Controller('users')
-// @UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  @Roles('admin')
+  @Roles('admin','superadmin')
   @ApiOperation({ summary: 'Create a new user' })
   @ApiResponse({ status: 201, description: 'The user has been successfully created.', type: User })
   @ApiResponse({ status: 400, description: 'Bad Request.' })

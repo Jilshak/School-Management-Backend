@@ -11,6 +11,7 @@ import { CreateStudentDto } from './dto/create-student.dto';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { CreateAdmissionDto } from './dto/create-admission.dto';
 import { UserRole } from '../domains/enums/user-roles.enum';
+import * as bcrypt from "bcrypt"
 
 @Injectable()
 export class UserService {
@@ -40,12 +41,15 @@ export class UserService {
         session = await this.connection.startSession();
         session.startTransaction();
       }
-
+      if(createUserDto.role!=="superadmin" && createUserDto.schoolId){
+        throw new Error("School Id not found")
+      }
+      const password = await bcrypt.hash(createUserDto.password,2)
       const createdUser = new this.userModel({
         email: createUserDto.email,
-        password: createUserDto.password,
+        password:password,
         role: createUserDto.role,
-        schoolId: new Types.ObjectId(createUserDto.schoolId),
+        schoolId:createUserDto.role!=="superadmin" ? new Types.ObjectId(createUserDto.schoolId) : undefined,
       });
       const savedUser = await createdUser.save({ session });
 
@@ -100,6 +104,7 @@ export class UserService {
       if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
         throw new BadRequestException('Email already exists');
       }
+      console.log(error)
       throw new InternalServerErrorException('Failed to create user');
     } finally {
       if (session) {

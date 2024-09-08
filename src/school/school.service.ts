@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
-import { Model, Connection } from 'mongoose';
+import { Model, Connection, Types } from 'mongoose';
 import { School } from 'src/domains/schema/school.schema';
 import { CreateSchoolDto } from './dto/create-school.dto';
 import { UpdateSchoolDto } from './dto/update-school.dto';
@@ -25,13 +25,13 @@ export class SchoolService {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+      console.log(createSchoolDto)
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
-
-      const createdSchool = new this.schoolModel(createSchoolDto);
+      const schoolTypeId =new Types.ObjectId(createSchoolDto.schoolTypeId)
+      const createdSchool = new this.schoolModel({...createSchoolDto,schoolTypeId});
       const result = await createdSchool.save({ session });
 
       if (session) {
@@ -42,6 +42,7 @@ export class SchoolService {
       if (session) {
         await session.abortTransaction();
       }
+      console.log(error)
       throw new InternalServerErrorException('Failed to create school');
     } finally {
       if (session) {

@@ -3,9 +3,9 @@ import { IsNotEmpty, IsString, IsMongoId } from 'class-validator';
 export class CreateSubjectDto {
   @IsNotEmpty()
   @IsString()
-  subjectName: string;
+  name: string;
 
   @IsNotEmpty()
-  @IsMongoId()
-  schoolId: string;
+  @IsString()
+  code: string;
 }

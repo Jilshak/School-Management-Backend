@@ -5,17 +5,15 @@ export type SubjectDocument = Subject & Document;
 
 @Schema()
 export class Subject {
-  @Prop({ required: true })
+  @Prop({ required: true,unique:true })
   name: string;
 
-  @Prop()
-  description: string;
+  @Prop({required:true,unique:true})
+  code: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Class', required: true })
-  classId: Types.ObjectId;
+  @Prop({required:true,ref:"School"})
+  schoolId:Types.ObjectId
 
-  @Prop({ type: Types.ObjectId, ref: 'Teacher', required: true })
-  teacherId: Types.ObjectId;
 }
 
 export const SubjectSchema = SchemaFactory.createForClass(Subject);

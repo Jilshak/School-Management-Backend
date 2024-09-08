@@ -281,7 +281,7 @@ export class ClassroomService {
         session.startTransaction();
       }
 
-      const subjects = await this.subjectModel.find({ teacherId }).session(session).exec();
+      const subjects = await this.subjectModel.find().session(session).exec();
       const subjectIds = subjects.map(subject => subject._id);
       
       let query = this.timeTableModel.find({ 'schedule.subjectId': { $in: subjectIds } }).session(session);

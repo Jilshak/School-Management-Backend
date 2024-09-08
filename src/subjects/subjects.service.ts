@@ -21,7 +21,7 @@ export class SubjectsService {
     }
   }
 
-  async create(createSubjectDto: CreateSubjectDto): Promise<Subject> {
+  async create(createSubjectDto: CreateSubjectDto,schoolId:string): Promise<Subject> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -31,7 +31,7 @@ export class SubjectsService {
         session.startTransaction();
       }
 
-      const createdSubject = new this.subjectModel(createSubjectDto);
+      const createdSubject = new this.subjectModel({...createSubjectDto,schoolId});
       const result = await createdSubject.save({ session });
 
       if (session) {
@@ -50,7 +50,7 @@ export class SubjectsService {
     }
   }
 
-  async findAll(): Promise<Subject[]> {
+  async findAll(schoolId:string): Promise<Subject[]> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -60,7 +60,7 @@ export class SubjectsService {
         session.startTransaction();
       }
 
-      const subjects = await this.subjectModel.find().session(session).exec();
+      const subjects = await this.subjectModel.find({schoolId}).session(session).exec();
 
       if (session) {
         await session.commitTransaction();

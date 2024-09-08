@@ -44,13 +44,6 @@ export class School extends Document {
   @Prop({required: true})
   schoolLogo: string;
 
-  @ApiProperty({ example: 500 })
-  @Prop({ required: true })
-  numberOfStudents: number;
-
-  @ApiProperty({ example: 50 })
-  @Prop({ required: true })
-  numberOfStaff: number;
 }
 
 export const SchoolSchema = SchemaFactory.createForClass(School);

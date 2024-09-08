@@ -16,7 +16,7 @@ export class SchoolController {
   constructor(private readonly schoolService: SchoolService) {}
 
   @Post()
-  @Roles('admin')
+  @Roles('superadmin')
   @ApiOperation({ summary: 'Create a new school' })
   @ApiResponse({ status: 201, description: 'The school has been successfully created.', type: School })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
