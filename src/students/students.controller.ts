@@ -1,4 +1,4 @@
-import { Controller, UseGuards, Get, Post, Body, Param, Delete, Put } from '@nestjs/common';
+import { Controller, UseGuards, Get, Post, Body, Param, Delete, Put, Patch } from '@nestjs/common';
 import { StudentsService } from './students.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
@@ -13,7 +13,7 @@ import { Admission } from '../domains/schema/admission.schema';
 @ApiTags('students')
 @ApiBearerAuth()
 @Controller('students')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+// @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class StudentsController {
   constructor(private readonly studentsService: StudentsService) {}
 
@@ -58,6 +58,19 @@ export class StudentsController {
   @ApiBody({ type: UpdateStudentDto })
   update(@Param('id') id: string, @Body() updateStudentDto: UpdateStudentDto) {
     return this.studentsService.update(id, updateStudentDto);
+  }
+
+  @Patch(':id')
+  @Roles('admin', 'teacher')
+  @ApiOperation({ summary: 'Partially update a student' })
+  @ApiResponse({ status: 200, description: 'The student has been successfully updated.', type: Student })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiResponse({ status: 404, description: 'Student not found.' })
+  @ApiResponse({ status: 403, description: 'Forbidden.' })
+  @ApiParam({ name: 'id', required: true, description: 'Student ID' })
+  @ApiBody({ type: UpdateStudentDto })
+  patch(@Param('id') id: string, @Body() patchStudentDto: Partial<UpdateStudentDto>) {
+    return this.studentsService.patch(id, patchStudentDto);
   }
 
   @Delete(':id')

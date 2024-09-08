@@ -340,4 +340,41 @@ export class StudentsService {
       }
     }
   }
+
+  async patch(id: string, patchStudentDto: Partial<UpdateStudentDto>): Promise<Student> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const existingStudent = await this.studentModel.findById(id).session(session);
+      if (!existingStudent) {
+        throw new NotFoundException(`Student with ID ${id} not found`);
+      }
+
+      Object.assign(existingStudent, patchStudentDto);
+      const updatedStudent = await existingStudent.save({ session });
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return updatedStudent;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to patch student');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
 }

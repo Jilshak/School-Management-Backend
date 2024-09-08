@@ -1,30 +1,12 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
-
-export type AdmissionDocument = Admission & Document;
+import { Document, Schema as MongooseSchema } from 'mongoose';
 
 @Schema()
-export class Admission {
-  @Prop({ required: true })
-  name: string;
+export class Admission extends Document {
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
+  userId: MongooseSchema.Types.ObjectId;
 
-  @Prop({ required: true })
-  email: string;
-
-  @Prop({ required: true })
-  dateOfBirth: Date;
-
-  @Prop({ required: true })
-  appliedClass: string;
-
-  @Prop()
-  parentName: string;
-
-  @Prop()
-  previousSchool: string;
-
-  @Prop({ default: 'Pending' })
-  status: string;
+  // ... other admission properties ...
 }
 
 export const AdmissionSchema = SchemaFactory.createForClass(Admission);

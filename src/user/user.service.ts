@@ -3,20 +3,21 @@ import { InjectModel, InjectConnection } from '@nestjs/mongoose';
 import { Model, Connection, Types } from 'mongoose';
 import { User } from '../domains/schema/user.schema';
 import { Student } from '../domains/schema/students.schema';
-import { Staff } from '../domains/schema/staff.schema';
+import { Employee } from '../domains/schema/employee.schema';
 import { Admission } from '../domains/schema/admission.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateStudentDto } from './dto/create-student.dto';
-import { CreateStaffDto } from './dto/create-staff.dto';
+import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { CreateAdmissionDto } from './dto/create-admission.dto';
+import { UserRole } from '../domains/enums/user-roles.enum';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Student.name) private studentModel: Model<Student>,
-    @InjectModel(Staff.name) private staffModel: Model<Staff>,
+    @InjectModel(Employee.name) private employeeModel: Model<Employee>,
     @InjectModel(Admission.name) private admissionModel: Model<Admission>,
     @InjectConnection() private connection: Connection
   ) {}
@@ -41,18 +42,63 @@ export class UserService {
       }
 
       const createdUser = new this.userModel({
-        ...createUserDto,
+        email: createUserDto.email,
+        password: createUserDto.password,
+        role: createUserDto.role,
         schoolId: new Types.ObjectId(createUserDto.schoolId),
       });
-      const result = await createdUser.save({ session });
+      const savedUser = await createdUser.save({ session });
+
+      if (createUserDto.role === UserRole.STUDENT) {
+        const studentData = {
+          userId: savedUser._id,
+          firstName: createUserDto.firstName,
+          lastName: createUserDto.lastName,
+          dateOfBirth: createUserDto.dateOfBirth,
+          gender: createUserDto.gender,
+          nationality: createUserDto.nationality,
+          contactNumber: createUserDto.contactNumber,
+          email: createUserDto.email,
+          address: createUserDto.address,
+          admissionDate: createUserDto.admissionDate,
+          grade: createUserDto.grade,
+          section: createUserDto.section,
+          enrollmentNumber: createUserDto.enrollmentNumber,
+          classID: new Types.ObjectId(createUserDto.classID),
+          schoolID: new Types.ObjectId(createUserDto.schoolId),
+          parentsDetails: createUserDto.parentsDetails,
+          adhaar: createUserDto.adhaar,
+          emergencyContactName: createUserDto.emergencyContactName,
+          emergencyContactNumber: createUserDto.emergencyContactNumber,
+          isActive: createUserDto.isActive,
+        };
+        const createdStudent = new this.studentModel(studentData);
+        await createdStudent.save({ session });
+      } else if (createUserDto.role === UserRole.EMPLOYEE) {
+        const employeeData = {
+          userId: savedUser._id,
+          firstName: createUserDto.firstName,
+          lastName: createUserDto.lastName,
+          email: createUserDto.email,
+          phoneNumber: createUserDto.contactNumber,
+          dateOfJoining: createUserDto.dateOfJoining,
+          position: createUserDto.position,
+          department: createUserDto.department,
+        };
+        const createdEmployee = new this.employeeModel(employeeData);
+        await createdEmployee.save({ session });
+      }
 
       if (session) {
         await session.commitTransaction();
       }
-      return result;
+      return savedUser;
     } catch (error) {
       if (session) {
         await session.abortTransaction();
+      }
+      if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
+        throw new BadRequestException('Email already exists');
       }
       throw new InternalServerErrorException('Failed to create user');
     } finally {
@@ -350,8 +396,8 @@ export class UserService {
     }
   }
 
-  // Staff
-  async createStaff(createStaffDto: CreateStaffDto): Promise<Staff> {
+  // Employees
+  async createEmployee(createEmployeeDto: CreateEmployeeDto): Promise<Employee> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -361,8 +407,8 @@ export class UserService {
         session.startTransaction();
       }
 
-      const createdStaff = new this.staffModel(createStaffDto);
-      const result = await createdStaff.save({ session });
+      const createdEmployee = new this.employeeModel(createEmployeeDto);
+      const result = await createdEmployee.save({ session });
 
       if (session) {
         await session.commitTransaction();
@@ -372,7 +418,7 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      throw new InternalServerErrorException('Failed to create staff');
+      throw new InternalServerErrorException('Failed to create employee');
     } finally {
       if (session) {
         session.endSession();
@@ -380,7 +426,7 @@ export class UserService {
     }
   }
 
-  async findAllStaff(): Promise<Staff[]> {
+  async findAllEmployees(): Promise<Employee[]> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -390,17 +436,17 @@ export class UserService {
         session.startTransaction();
       }
 
-      const staff = await this.staffModel.find().session(session).exec();
+      const employees = await this.employeeModel.find().session(session).exec();
 
       if (session) {
         await session.commitTransaction();
       }
-      return staff;
+      return employees;
     } catch (error) {
       if (session) {
         await session.abortTransaction();
       }
-      throw new InternalServerErrorException('Failed to fetch staff');
+      throw new InternalServerErrorException('Failed to fetch employees');
     } finally {
       if (session) {
         session.endSession();
@@ -408,7 +454,7 @@ export class UserService {
     }
   }
 
-  async findOneStaff(id: string): Promise<Staff> {
+  async findOneEmployee(id: string): Promise<Employee> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -418,49 +464,15 @@ export class UserService {
         session.startTransaction();
       }
 
-      const staff = await this.staffModel.findById(id).session(session).exec();
-      if (!staff) {
-        throw new NotFoundException(`Staff with ID ${id} not found`);
+      const employee = await this.employeeModel.findById(id).session(session).exec();
+      if (!employee) {
+        throw new NotFoundException(`Employee with ID ${id} not found`);
       }
 
       if (session) {
         await session.commitTransaction();
       }
-      return staff;
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new InternalServerErrorException('Failed to fetch staff');
-    } finally {
-      if (session) {
-        session.endSession();
-      }
-    }
-  }
-
-  async updateStaff(id: string, updateStaffDto: CreateStaffDto): Promise<Staff> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
-      
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
-
-      const updatedStaff = await this.staffModel.findByIdAndUpdate(id, updateStaffDto, { new: true, session }).exec();
-      if (!updatedStaff) {
-        throw new NotFoundException(`Staff with ID ${id} not found`);
-      }
-
-      if (session) {
-        await session.commitTransaction();
-      }
-      return updatedStaff;
+      return employee;
     } catch (error) {
       if (session) {
         await session.abortTransaction();
@@ -468,7 +480,7 @@ export class UserService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to update staff');
+      throw new InternalServerErrorException('Failed to fetch employee');
     } finally {
       if (session) {
         session.endSession();
@@ -476,7 +488,7 @@ export class UserService {
     }
   }
 
-  async removeStaff(id: string): Promise<void> {
+  async updateEmployee(id: string, updateEmployeeDto: CreateEmployeeDto): Promise<Employee> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -486,9 +498,43 @@ export class UserService {
         session.startTransaction();
       }
 
-      const result = await this.staffModel.findByIdAndDelete(id).session(session).exec();
+      const updatedEmployee = await this.employeeModel.findByIdAndUpdate(id, updateEmployeeDto, { new: true, session }).exec();
+      if (!updatedEmployee) {
+        throw new NotFoundException(`Employee with ID ${id} not found`);
+      }
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return updatedEmployee;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to update employee');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async removeEmployee(id: string): Promise<void> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const result = await this.employeeModel.findByIdAndDelete(id).session(session).exec();
       if (!result) {
-        throw new NotFoundException(`Staff with ID ${id} not found`);
+        throw new NotFoundException(`Employee with ID ${id} not found`);
       }
 
       if (session) {
@@ -501,7 +547,7 @@ export class UserService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to remove staff');
+      throw new InternalServerErrorException('Failed to remove employee');
     } finally {
       if (session) {
         session.endSession();
