@@ -7,6 +7,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
 import { User } from '../domains/schema/user.schema';
+import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -21,8 +22,8 @@ export class UserController {
   @ApiResponse({ status: 201, description: 'The user has been successfully created.', type: User })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
   @ApiBody({ type: CreateUserDto })
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.userService.create(createUserDto);
+  create(@Body() createUserDto: CreateUserDto,@LoginUser("schoolId") schoolId) {
+    return this.userService.create(createUserDto,schoolId);
   }
 
   @Get()

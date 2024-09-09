@@ -3,7 +3,6 @@ import { InjectModel, InjectConnection } from '@nestjs/mongoose';
 import { Model, Connection, Types } from 'mongoose';
 import { User } from '../domains/schema/user.schema';
 import { Student } from '../domains/schema/students.schema';
-import { Employee } from '../domains/schema/employee.schema';
 import { Admission } from '../domains/schema/admission.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -12,13 +11,16 @@ import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { CreateAdmissionDto } from './dto/create-admission.dto';
 import { UserRole } from '../domains/enums/user-roles.enum';
 import * as bcrypt from "bcrypt"
+import { Staff } from 'src/domains/schema/staff.schema';
+import { Teacher } from 'src/domains/schema/teacher.schema';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Student.name) private studentModel: Model<Student>,
-    @InjectModel(Employee.name) private employeeModel: Model<Employee>,
+    @InjectModel(Staff.name) private staffModel: Model<Staff>,
+    @InjectModel(Teacher.name) private teacherModel: Model<Teacher>,
     @InjectModel(Admission.name) private admissionModel: Model<Admission>,
     @InjectConnection() private connection: Connection
   ) {}
@@ -32,7 +34,7 @@ export class UserService {
     }
   }
 
-  async create(createUserDto: CreateUserDto): Promise<User> {
+  async create(createUserDto: CreateUserDto,schoolId?:Types.ObjectId): Promise<User> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -41,7 +43,10 @@ export class UserService {
         session = await this.connection.startSession();
         session.startTransaction();
       }
-      if(createUserDto.role!=="superadmin" && createUserDto.schoolId){
+      if(createUserDto.role==="superadmin" && schoolId){
+        throw new Error("Only super admin can create super admin")
+      }
+      if(createUserDto.role!=="superadmin" && !createUserDto.schoolId){
         throw new Error("School Id not found")
       }
       const password = await bcrypt.hash(createUserDto.password,2)
@@ -49,12 +54,37 @@ export class UserService {
         email: createUserDto.email,
         password:password,
         role: createUserDto.role,
-        schoolId:createUserDto.role!=="superadmin" ? new Types.ObjectId(createUserDto.schoolId) : undefined,
+        schoolId:createUserDto.role!=="superadmin" ? new Types.ObjectId(schoolId || createUserDto.schoolId ) : undefined,
       });
       const savedUser = await createdUser.save({ session });
 
       if (createUserDto.role === UserRole.STUDENT) {
-        const studentData = {
+        // const studentData = {
+        //   userId: savedUser._id,
+        //   firstName: createUserDto.firstName,
+        //   lastName: createUserDto.lastName,
+        //   dateOfBirth: createUserDto.dateOfBirth,
+        //   gender: createUserDto.gender,
+        //   nationality: createUserDto.nationality,
+        //   contactNumber: createUserDto.contactNumber,
+        //   email: createUserDto.email,
+        //   address: createUserDto.address,
+        //   admissionDate: createUserDto.admissionDate,
+        //   grade: createUserDto.grade,
+        //   section: createUserDto.section,
+        //   enrollmentNumber: createUserDto.enrollmentNumber,
+        //   classID: new Types.ObjectId(createUserDto.classID),
+        //   schoolID: new Types.ObjectId(createUserDto.schoolId),
+        //   parentsDetails: createUserDto.parentsDetails,
+        //   adhaar: createUserDto.adhaar,
+        //   emergencyContactName: createUserDto.emergencyContactName,
+        //   emergencyContactNumber: createUserDto.emergencyContactNumber,
+        //   isActive: createUserDto.isActive,
+        // };
+        // const createdStudent = new this.studentModel(studentData);
+        // await createdStudent.save({ session });
+      } else if (createUserDto.role === UserRole.STAFF) {
+        const createdStaff = new this.staffModel( {
           userId: savedUser._id,
           firstName: createUserDto.firstName,
           lastName: createUserDto.lastName,
@@ -64,33 +94,43 @@ export class UserService {
           contactNumber: createUserDto.contactNumber,
           email: createUserDto.email,
           address: createUserDto.address,
-          admissionDate: createUserDto.admissionDate,
-          grade: createUserDto.grade,
-          section: createUserDto.section,
-          enrollmentNumber: createUserDto.enrollmentNumber,
-          classID: new Types.ObjectId(createUserDto.classID),
+          joinDate: createUserDto.joinDate,
+          department: createUserDto.department,
+          position: createUserDto.position,
+          qualifications: createUserDto.qualifications,
+          previousEmployments: createUserDto.previousEmployments,
           schoolID: new Types.ObjectId(createUserDto.schoolId),
-          parentsDetails: createUserDto.parentsDetails,
-          adhaar: createUserDto.adhaar,
+          adhaarNumber: createUserDto.adhaarNumber,
+          pancardNumber: createUserDto.pancardNumber,
           emergencyContactName: createUserDto.emergencyContactName,
           emergencyContactNumber: createUserDto.emergencyContactNumber,
-          isActive: createUserDto.isActive,
-        };
-        const createdStudent = new this.studentModel(studentData);
-        await createdStudent.save({ session });
-      } else if (createUserDto.role === UserRole.EMPLOYEE) {
-        const employeeData = {
+          pancardDocument:createUserDto.pancardDocument,
+          adhaarDocument:createUserDto.adhaarDocument
+        });
+        await createdStaff.save({ session });
+      } else if (createUserDto.role === UserRole.TEACHER) {
+        const teacherData = {
           userId: savedUser._id,
           firstName: createUserDto.firstName,
           lastName: createUserDto.lastName,
-          email: createUserDto.email,
-          phoneNumber: createUserDto.contactNumber,
-          dateOfJoining: createUserDto.dateOfJoining,
-          position: createUserDto.position,
-          department: createUserDto.department,
+          dateOfBirth: createUserDto.dateOfBirth,
+          gender: createUserDto.gender,
+          nationality: createUserDto.nationality,
+          contactNumber: createUserDto.contactNumber,
+          address: createUserDto.address,
+          joinDate: createUserDto.joinDate,
+          subjects: createUserDto.subjects.map((x) => new Types.ObjectId(x.toString())),
+          qualifications: createUserDto.qualifications,
+          schoolID: new Types.ObjectId(createUserDto.schoolId),
+          adhaarNumber: createUserDto.adhaarNumber,
+          pancardNumber: createUserDto.pancardNumber,
+          emergencyContactName: createUserDto.emergencyContactName,
+          emergencyContactNumber: createUserDto.emergencyContactNumber,
+          pancardDocument:createUserDto.pancardDocument,
+          adhaarDocument:createUserDto.adhaarDocument
         };
-        const createdEmployee = new this.employeeModel(employeeData);
-        await createdEmployee.save({ session });
+        const createdTeacher = new this.teacherModel(teacherData);
+        await createdTeacher.save({ session });
       }
 
       if (session) {
@@ -402,7 +442,7 @@ export class UserService {
   }
 
   // Employees
-  async createEmployee(createEmployeeDto: CreateEmployeeDto): Promise<Employee> {
+  async createEmployee(createEmployeeDto: CreateEmployeeDto): Promise<any> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -412,7 +452,7 @@ export class UserService {
         session.startTransaction();
       }
 
-      const createdEmployee = new this.employeeModel(createEmployeeDto);
+      const createdEmployee = new this.staffModel(createEmployeeDto);
       const result = await createdEmployee.save({ session });
 
       if (session) {
@@ -431,7 +471,7 @@ export class UserService {
     }
   }
 
-  async findAllEmployees(): Promise<Employee[]> {
+  async findAllEmployees(): Promise<any[]> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -441,7 +481,7 @@ export class UserService {
         session.startTransaction();
       }
 
-      const employees = await this.employeeModel.find().session(session).exec();
+      const employees = await this.staffModel.find().session(session).exec();
 
       if (session) {
         await session.commitTransaction();
@@ -459,7 +499,7 @@ export class UserService {
     }
   }
 
-  async findOneEmployee(id: string): Promise<Employee> {
+  async findOneEmployee(id: string): Promise<any> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -469,9 +509,9 @@ export class UserService {
         session.startTransaction();
       }
 
-      const employee = await this.employeeModel.findById(id).session(session).exec();
+      const employee = await this.staffModel.findById(id).session(session).exec();
       if (!employee) {
-        throw new NotFoundException(`Employee with ID ${id} not found`);
+        throw new NotFoundException(`any with ID ${id} not found`);
       }
 
       if (session) {
@@ -493,7 +533,7 @@ export class UserService {
     }
   }
 
-  async updateEmployee(id: string, updateEmployeeDto: CreateEmployeeDto): Promise<Employee> {
+  async updateEmployee(id: string, updateEmployeeDto: CreateEmployeeDto): Promise<any> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -503,9 +543,9 @@ export class UserService {
         session.startTransaction();
       }
 
-      const updatedEmployee = await this.employeeModel.findByIdAndUpdate(id, updateEmployeeDto, { new: true, session }).exec();
+      const updatedEmployee = await this.staffModel.findByIdAndUpdate(id, updateEmployeeDto, { new: true, session }).exec();
       if (!updatedEmployee) {
-        throw new NotFoundException(`Employee with ID ${id} not found`);
+        throw new NotFoundException(`any with ID ${id} not found`);
       }
 
       if (session) {
@@ -537,9 +577,9 @@ export class UserService {
         session.startTransaction();
       }
 
-      const result = await this.employeeModel.findByIdAndDelete(id).session(session).exec();
+      const result = await this.staffModel.findByIdAndDelete(id).session(session).exec();
       if (!result) {
-        throw new NotFoundException(`Employee with ID ${id} not found`);
+        throw new NotFoundException(`any with ID ${id} not found`);
       }
 
       if (session) {

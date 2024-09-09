@@ -1,27 +1,95 @@
-import { IsEmail, IsString, IsEnum, IsDate, IsOptional, IsMongoId, ValidateNested, IsBoolean, IsPhoneNumber } from 'class-validator';
+import { IsEmail, IsString, IsEnum, IsDate, IsOptional, IsMongoId, ValidateNested, IsBoolean, IsPhoneNumber, IsArray, IsNumber, IsNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { UserRole } from '../../domains/enums/user-roles.enum';
 import { Gender } from '../../domains/enums/gender.enum';
 import { ObjectId } from 'mongodb';
+import { Types } from 'mongoose';
 
-class ParentsDetails {
-  @ApiProperty({ example: 'John Doe' })
+
+
+class QualificationDto {
+  @ApiProperty({ example: 'url/to/document' })
   @IsString()
-  guardianName: string;
+  document: string;
 
-  @ApiProperty({ example: '+1234567890' })
-  @IsPhoneNumber()
-  guardianContactNumber: string;
-
-  @ApiProperty({ required: false, example: 'guardian@example.com' })
-  @IsEmail()
-  @IsOptional()
-  guardianEmail?: string;
-
-  @ApiProperty({ example: 'Father' })
+  @ApiProperty({ example: 'University Name' })
   @IsString()
-  relationshipToStudent: string;
+  instituteName: string;
+
+  @ApiProperty({ example: 'Bachelor of Education' })
+  @IsString()
+  degree: string;
+
+  @ApiProperty({ example: 'Education' })
+  @IsString()
+  fieldOfStudy: string;
+
+  @ApiProperty({ example: 2020 })
+  @IsNumber()
+  yearOfPass: number;
+
+  @ApiProperty({ example: '85%' })
+  @IsString()
+  gradePercentage: string;
+}
+
+class CertificateDto {
+  @ApiProperty({ example: 'Teaching Excellence' })
+  @IsString()
+  certificate: string;
+
+  @ApiProperty({ example: 'Education Board' })
+  @IsString()
+  issueAuthority: string;
+
+  @ApiProperty({ example: '2022-01-01' })
+  @IsDate()
+  @Type(() => Date)
+  issueDate: Date;
+}
+
+class PublicationDto {
+  @ApiProperty({ example: 'url/to/document' })
+  @IsString()
+  document: string;
+
+  @ApiProperty({ example: 'Modern Teaching Methods' })
+  @IsString()
+  publicationName: string;
+
+  @ApiProperty({ example: '2021-06-15' })
+  @IsDate()
+  @Type(() => Date)
+  publicationDate: Date;
+
+  @ApiProperty({ example: 'https://example.com/publication' })
+  @IsString()
+  linkUrl: string;
+}
+
+class PreviousEmploymentDto {
+  @ApiProperty({ example: 'url/to/document' })
+  @IsString()
+  document: string;
+
+  @ApiProperty({ example: 'Previous School' })
+  @IsString()
+  instituteName: string;
+
+  @ApiProperty({ example: 'Teacher' })
+  @IsString()
+  role: string;
+
+  @ApiProperty({ example: '2018-01-01' })
+  @IsDate()
+  @Type(() => Date)
+  joinedDate: Date;
+
+  @ApiProperty({ example: '2022-12-31' })
+  @IsDate()
+  @Type(() => Date)
+  revealedDate: Date;
 }
 
 export class CreateUserDto {
@@ -33,7 +101,7 @@ export class CreateUserDto {
   @IsString()
   password: string;
 
-  @ApiProperty({ enum: UserRole, example: UserRole.STUDENT })
+  @ApiProperty({ enum: UserRole, example: UserRole.STAFF })
   @IsEnum(UserRole)
   role: UserRole;
 
@@ -66,41 +134,35 @@ export class CreateUserDto {
   @IsString()
   address: string;
 
-  @ApiProperty({ example: '2023-09-01' })
-  @IsDate()
-  @Type(() => Date)
-  admissionDate: Date;
-
-  @ApiProperty({ example: '10' })
-  @IsString()
-  grade: string;
-
-  @ApiProperty({ required: false, example: 'A' })
+  @ApiProperty({ required: false, example: 'California' })
   @IsString()
   @IsOptional()
-  section?: string;
-
-  @ApiProperty({ example: 'EN2023001' })
-  @IsString()
-  enrollmentNumber: string;
-
-  @ApiProperty({ example: '507f1f77bcf86cd799439011' })
-  @IsMongoId()
-  classID: ObjectId;
-
-  @ApiProperty({ example: '507f1f77bcf86cd799439012' })
-  @IsMongoId()
-  schoolId: ObjectId;
-
-  @ApiProperty({ type: ParentsDetails })
-  @ValidateNested()
-  @Type(() => ParentsDetails)
-  parentsDetails: ParentsDetails;
+  state?: string;
 
   @ApiProperty({ required: false, example: '1234 5678 9012' })
   @IsString()
   @IsOptional()
-  adhaar?: string;
+  adhaarNumber?: string;
+
+  @ApiProperty({ required: false, example: 'url/to/adhaar/document' })
+  @IsString()
+  @IsOptional()
+  adhaarDocument?: string;
+
+  @ApiProperty({ required: false, example: 'ABCDE1234F' })
+  @IsString()
+  @IsOptional()
+  pancardNumber?: string;
+
+  @ApiProperty({ required: false, example: 'url/to/pancard/document' })
+  @IsString()
+  @IsOptional()
+  pancardDocument?: string;
+
+  @ApiProperty({ example: '2023-01-01' })
+  @IsDate()
+  @Type(() => Date)
+  joinDate: Date;
 
   @ApiProperty({ example: 'Emergency Contact' })
   @IsString()
@@ -110,24 +172,51 @@ export class CreateUserDto {
   @IsPhoneNumber()
   emergencyContactNumber: string;
 
-  @ApiProperty({ example: true })
-  @IsBoolean()
-  isActive: boolean;
+  @ApiProperty({ example: '507f1f77bcf86cd799439012' })
+  @IsMongoId()
+  schoolId: ObjectId;
 
-  // Employee-specific fields
-  @ApiProperty({ required: false, example: '2023-01-01' })
-  @IsDate()
-  @Type(() => Date)
+  @ApiProperty({ required: false, example: 'IT' })
+  @IsString()
   @IsOptional()
-  dateOfJoining?: Date;
+  department?: string;
 
-  @ApiProperty({ required: false, example: 'Teacher' })
+  @ApiProperty({ required: false, example: 'Senior Developer' })
   @IsString()
   @IsOptional()
   position?: string;
 
-  @ApiProperty({ required: false, example: 'Mathematics' })
-  @IsString()
+  @ApiProperty({ type: [QualificationDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => QualificationDto)
   @IsOptional()
-  department?: string;
+  qualifications?: QualificationDto[];
+
+  @ApiProperty({ type: [String] })
+  @IsArray()
+  @Type(() => String)
+  @IsOptional()
+  subjects?: String[];
+
+  @ApiProperty({ type: [CertificateDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CertificateDto)
+  @IsOptional()
+  certificates?: CertificateDto[];
+
+  @ApiProperty({ type: [PublicationDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PublicationDto)
+  @IsOptional()
+  publications?: PublicationDto[];
+
+  @ApiProperty({ type: [PreviousEmploymentDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PreviousEmploymentDto)
+  @IsOptional()
+  previousEmployments?: PreviousEmploymentDto[];
 }
