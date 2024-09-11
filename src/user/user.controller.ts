@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query } from '@nestjs/common';
 import { UserService } from './user.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../shared/guards/roles.guard';
@@ -30,8 +30,8 @@ export class UserController {
   @Roles('admin')
   @ApiOperation({ summary: 'Get all users' })
   @ApiResponse({ status: 200, description: 'Return all users.', type: [User] })
-  findAll() {
-    return this.userService.findAll();
+  findAll(@Query() role:string[],@LoginUser("schoolId") schoolId) {
+    return this.userService.findAll(role,schoolId);
   }
 
   @Get(':id')
@@ -52,8 +52,8 @@ export class UserController {
   @ApiResponse({ status: 404, description: 'User not found.' })
   @ApiParam({ name: 'id', required: true, description: 'User ID' })
   @ApiBody({ type: UpdateUserDto })
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.userService.update(id, updateUserDto);
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto,@LoginUser("schoolId") schoolId) {
+    return this.userService.update(id, updateUserDto,schoolId);
   }
 
   @Delete(':id')
@@ -62,7 +62,7 @@ export class UserController {
   @ApiResponse({ status: 200, description: 'The user has been successfully deleted.' })
   @ApiResponse({ status: 404, description: 'User not found.' })
   @ApiParam({ name: 'id', required: true, description: 'User ID' })
-  remove(@Param('id') id: string) {
-    return this.userService.remove(id);
+  remove(@Param('id') id: string,@LoginUser("schoolId") schoolId) {
+    return this.userService.remove(id,schoolId);
   }
 }
