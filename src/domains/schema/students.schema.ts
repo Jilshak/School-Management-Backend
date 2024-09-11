@@ -10,9 +10,6 @@ class ParentsDetails {
   @Prop({ required: true })
   guardianContactNumber: string;
 
-  @Prop()
-  guardianEmail?: string;
-
   @Prop({ required: true })
   relationshipToStudent: string;
 }
@@ -34,41 +31,45 @@ export class Student extends Document {
   @Prop({ required: true, enum: Gender })
   gender: Gender;
 
-  @Prop({ required: true })
+  @Prop()
   nationality: string;
 
   @Prop({ required: true })
   contactNumber: string;
 
-  @Prop({ required: true, unique: true })
-  email: string;
-
-  @Prop({ required: true })
-  address: string;
-
-  @Prop({ required: true })
-  admissionDate: Date;
-
-  @Prop({ required: true })
-  grade: string;
+  @Prop()
+  state: string;
 
   @Prop()
-  section?: string;
+  address: string;
+
+  @Prop({ required: true, default: Date.now() })
+  joinDate: Date;
 
   @Prop({ required: true, unique: true })
   enrollmentNumber: string;
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Class', required: true })
-  classID: MongooseSchema.Types.ObjectId;
+  classId: MongooseSchema.Types.ObjectId;
 
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'School', required: true })
-  schoolID: MongooseSchema.Types.ObjectId;
 
   @Prop({ type: ParentsDetails, required: true })
   parentsDetails: ParentsDetails;
 
   @Prop()
-  adhaar?: string;
+  adhaarNumber: string;
+
+  @Prop()
+  adhaarDocument: string;
+
+  @Prop()
+  birthCertificateDocument: string;
+
+  @Prop()
+  tcNumber: string;
+
+  @Prop()
+  tcDocument: string;
 
   @Prop({ required: true })
   emergencyContactName: string;
@@ -76,7 +77,7 @@ export class Student extends Document {
   @Prop({ required: true })
   emergencyContactNumber: string;
 
-  @Prop({ required: true, default: true })
+  @Prop({  default: true })
   isActive: boolean;
 }
 

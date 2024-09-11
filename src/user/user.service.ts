@@ -106,32 +106,37 @@ export class UserService {
         };
         const createdTeacher = new this.teacherModel(teacherData);
         await createdTeacher.save({ session });
-      }else{
+      }else if(savedUser.role===UserRole.STUDENT){
         
-          // const studentData = {
-          //   userId: savedUser._id,
-          //   firstName: createUserDto.firstName,
-          //   lastName: createUserDto.lastName,
-          //   dateOfBirth: createUserDto.dateOfBirth,
-          //   gender: createUserDto.gender,
-          //   nationality: createUserDto.nationality,
-          //   contactNumber: createUserDto.contactNumber,
-          //   email: createUserDto.email,
-          //   address: createUserDto.address,
-          //   admissionDate: createUserDto.admissionDate,
-          //   grade: createUserDto.grade,
-          //   section: createUserDto.section,
-          //   enrollmentNumber: createUserDto.enrollmentNumber,
-          //   classID: new Types.ObjectId(createUserDto.classID),
-          //   schoolID: new Types.ObjectId(createUserDto.schoolId),
-          //   parentsDetails: createUserDto.parentsDetails,
-          //   adhaar: createUserDto.adhaar,
-          //   emergencyContactName: createUserDto.emergencyContactName,
-          //   emergencyContactNumber: createUserDto.emergencyContactNumber,
-          //   isActive: createUserDto.isActive,
-          // };
-          // const createdStudent = new this.studentModel(studentData);
-          // await createdStudent.save({ session });
+         
+          const createdStudent = new this.studentModel({
+            userId: savedUser._id,
+            firstName: createUserDto.firstName,
+            lastName: createUserDto.lastName,
+            dateOfBirth: createUserDto.dateOfBirth,
+            gender: createUserDto.gender,
+            nationality: createUserDto.nationality,
+            contactNumber: createUserDto.contactNumber,
+            address: createUserDto.address,
+            joinDate: createUserDto.joinDate,
+            enrollmentNumber: createUserDto.enrollmentNumber,
+            classId: new Types.ObjectId(createUserDto.classId),
+            parentsDetails: createUserDto.parentsDetails,
+            adhaarNumber: createUserDto.adhaarNumber,
+            emergencyContactName: createUserDto.emergencyContactName,
+            emergencyContactNumber: createUserDto.emergencyContactNumber,
+            adhaarDocument:createUserDto.adhaarDocument,
+            state:createUserDto.state,
+            birthCertificateDocument:createUserDto.birthCertificateDocument,
+            tcNumber:createUserDto.tcNumber,
+            tcDocument:createUserDto.tcDocument,
+          });
+          await createdStudent.save({ session });
+          const admissionPayments = new this.admissionModel({
+            paymentDetails:createUserDto.paymentDetails,
+            userId:savedUser._id
+          })
+          await admissionPayments.save({session})
         
       }
 
@@ -170,10 +175,13 @@ export class UserService {
       const enhancedUsers = await Promise.all(users.map(async (x) => {
         const userObject = x.toObject();
         if (x.role === UserRole.STAFF) {
-          const temp = await this.staffModel.findOne({ userId: x._id }).lean();
+          const temp = await this.staffModel.findOne({ userId: x._id }).lean().session(session).exec();
           return { ...userObject, ...temp };
         } else if (x.role === UserRole.TEACHER) {
-          const temp = await this.teacherModel.findOne({ userId: x._id }).lean();
+          const temp = await this.teacherModel.findOne({ userId: x._id }).lean().session(session).exec();
+          return { ...userObject, ...temp };
+        }else if(x.role===UserRole.STUDENT){
+          const temp = await this.studentModel.findOne({ userId: x._id }).lean().session(session).exec();
           return { ...userObject, ...temp };
         }
         return userObject;
@@ -195,7 +203,7 @@ export class UserService {
     }
   }
 
-  async findOne(id: string): Promise<User> {
+  async findOne(id: string,schoolId:Types.ObjectId): Promise<User> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -205,7 +213,7 @@ export class UserService {
         session.startTransaction();
       }
 
-      let user:any = await this.userModel.findById(id).session(session).exec();
+      let user:any = await this.userModel.findOne({_id:new Types.ObjectId(id),schoolId}).session(session).exec();
       if(user.role===UserRole.STAFF){
         const staffDetails = await this.staffModel.findOne({userId:user._id})
         user = {...user,...staffDetails}
@@ -213,7 +221,8 @@ export class UserService {
         const teacherDetails = await this.teacherModel.findOne({userId:user._id})
         user = {...user,...teacherDetails} 
       }else{
-        
+        const studentDetails = await this.studentModel.findOne({userId:user._id})
+        user = {...user,...studentDetails} 
       }
       if (!user) {
         throw new NotFoundException(`User with ID ${id} not found`);
@@ -253,9 +262,11 @@ export class UserService {
         throw new NotFoundException(`User with ID ${id} not found`);
       }
       if(updatedUser.role===UserRole.STAFF){
-        await this.staffModel.findOneAndUpdate({userId:updatedUser._id},{$set:updateUserDto})
+        await this.staffModel.findOneAndUpdate({userId:updatedUser._id},{$set:updateUserDto}).session(session).exec()
       }else if(updatedUser.role===UserRole.TEACHER){
-        await this.teacherModel.findOneAndUpdate({userId:updatedUser._id},{$set:updateUserDto})
+        await this.teacherModel.findOneAndUpdate({userId:updatedUser._id},{$set:updateUserDto}).session(session).exec()
+      }else if(updateUserDto.role===UserRole.STUDENT){
+        await this.studentModel.findOneAndUpdate({userId:updatedUser._id},{$set:updateUserDto}).session(session).exec()
 
       }
 

@@ -35,13 +35,13 @@ export class UserController {
   }
 
   @Get(':id')
-  @Roles('admin')
+  @Roles()
   @ApiOperation({ summary: 'Get a user by id' })
   @ApiResponse({ status: 200, description: 'Return the user.', type: User })
   @ApiResponse({ status: 404, description: 'User not found.' })
   @ApiParam({ name: 'id', required: true, description: 'User ID' })
-  findOne(@Param('id') id: string) {
-    return this.userService.findOne(id);
+  findOne(@Param('id') id: string,@LoginUser("schoolId") schoolId) {
+    return this.userService.findOne(id,schoolId);
   }
 
   @Put(':id')

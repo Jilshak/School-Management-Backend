@@ -1,4 +1,17 @@
-import { IsEmail, IsString, IsEnum, IsDate, IsOptional, IsMongoId, ValidateNested, IsBoolean, IsPhoneNumber, IsArray, IsNumber, IsNotEmpty } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  IsEnum,
+  IsDate,
+  IsOptional,
+  IsMongoId,
+  ValidateNested,
+  IsBoolean,
+  IsPhoneNumber,
+  IsArray,
+  IsNumber,
+  IsNotEmpty,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { UserRole } from '../../domains/enums/user-roles.enum';
@@ -7,6 +20,36 @@ import { ObjectId } from 'mongodb';
 import { Types } from 'mongoose';
 
 
+class PaymentDetails {
+  @ApiProperty({ example: 'Tuition Fee' })
+  @IsString()
+  @IsNotEmpty()
+  fee: string;
+
+  @ApiProperty({ example: 'First semester tuition fee', required: false })
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @ApiProperty({ example: 1000 })
+  @IsNumber()
+  @IsNotEmpty()
+  amount: number;
+}
+
+class ParentsDetailsDto {
+  @ApiProperty({ example: 'John Doe' })
+  @IsString()
+  guardianName: string;
+
+  @ApiProperty({ example: '+1234567890' })
+  @IsPhoneNumber()
+  guardianContactNumber: string;
+
+  @ApiProperty({ example: 'Father' })
+  @IsString()
+  relationshipToStudent: string;
+}
 
 class QualificationDto {
   @ApiProperty({ example: 'url/to/document' })
@@ -219,4 +262,45 @@ export class CreateUserDto {
   @Type(() => PreviousEmploymentDto)
   @IsOptional()
   previousEmployments?: PreviousEmploymentDto[];
+
+  @ApiProperty({ required: false, example: 'ENR12345' })
+  @IsString()
+  @IsOptional()
+  enrollmentNumber?: string;
+
+  @ApiProperty({ required: false, example: 'url/to/birthCertificate/document' })
+  @IsString()
+  @IsOptional()
+  birthCertificateDocument?: string;
+
+  @ApiProperty({ required: false, example: 'TC12345' })
+  @IsString()
+  @IsOptional()
+  tcNumber?: string;
+
+  @ApiProperty({ required: false, example: 'url/to/tcDocument/document' })
+  @IsString()
+  @IsOptional()
+  tcDocument?: string;
+
+  @ApiProperty({ required: false, example: 'classId' })
+  @IsString()
+  @IsOptional()
+  classId?: string;
+
+  @ApiProperty({ required: false, type: ParentsDetailsDto })
+  @ValidateNested()
+  @Type(() => ParentsDetailsDto)
+  @IsOptional()
+  parentsDetails?: ParentsDetailsDto;
+
+
+  @ApiProperty({ type: [PaymentDetails], required: false })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PaymentDetails)
+  @IsOptional()
+  paymentDetails?: PaymentDetails[];
 }
+
+
