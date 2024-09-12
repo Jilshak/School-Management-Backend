@@ -11,6 +11,8 @@ import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../shared/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
+import { Types } from 'mongoose';
 
 @ApiTags('classroom')
 @ApiBearerAuth()
@@ -20,33 +22,41 @@ export class ClassroomController {
   constructor(private readonly classroomService: ClassroomService) {}
 
   @Post()
-  @Roles('admin', 'teacher')
+  @Roles('admin','staff')
   @ApiOperation({ summary: 'Create a new classroom' })
   @ApiResponse({ status: 201, description: 'The classroom has been successfully created.' })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
   @ApiBody({ type: CreateClassroomDto })
-  async create(@Body(ValidationPipe) createClassroomDto: CreateClassroomDto) {
-    return this.classroomService.create(createClassroomDto);
+  async create(@Body(ValidationPipe) createClassroomDto: CreateClassroomDto,@LoginUser("schoolId") schoolId) {
+    return this.classroomService.create(createClassroomDto,schoolId);
   }
 
   @Get()
-  @Roles('admin', 'teacher', 'student')
+  @Roles('admin', 'teacher','staff')
   @ApiOperation({ summary: 'Get all classrooms' })
   @ApiResponse({ status: 200, description: 'Return all classrooms.' })
+  @ApiQuery({ name: 'search', required: false, description: 'search by class Name and academic year' })
+  @ApiQuery({ name: 'full', required: false, description: 'If pagination not required give this true' })
   @ApiQuery({ name: 'page', required: false, description: 'Page number for pagination' })
   @ApiQuery({ name: 'limit', required: false, description: 'Number of items per page' })
-  async findAll(@Query('page') page?: number, @Query('limit') limit?: number) {
-    return this.classroomService.findAll(page, limit);
+  async findAll(
+    @LoginUser("schoolId") schoolId: Types.ObjectId,
+    @Query('search') search?: string,
+    @Query('full') full?: boolean,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number
+  ) {
+    return this.classroomService.findAll(schoolId, search, full, page, limit);
   }
 
   @Get(':id')
-  @Roles('admin', 'teacher', 'student')
+  @Roles('admin', 'teacher', 'student','staff')
   @ApiOperation({ summary: 'Get a classroom by id' })
   @ApiResponse({ status: 200, description: 'Return the classroom.' })
   @ApiResponse({ status: 404, description: 'Classroom not found.' })
   @ApiParam({ name: 'id', required: true, description: 'Classroom ID' })
-  async findOne(@Param('id') id: string) {
-    return this.classroomService.findOne(id);
+  async findOne(@Param('id') id: string,@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    return this.classroomService.findOne(id,schoolId);
   }
 
   @Put(':id')
@@ -56,8 +66,8 @@ export class ClassroomController {
   @ApiResponse({ status: 400, description: 'Bad Request.' })
   @ApiResponse({ status: 404, description: 'Classroom not found.' })
   @ApiParam({ name: 'id', required: true, description: 'Classroom ID' })
-  async update(@Param('id') id: string, @Body(ValidationPipe) updateClassroomDto: UpdateClassroomDto) {
-    return this.classroomService.update(id, updateClassroomDto);
+  async update(@Param('id') id: string, @Body(ValidationPipe) updateClassroomDto: UpdateClassroomDto,@LoginUser('schoolId') schoolId:Types.ObjectId) {
+    return this.classroomService.update(id, updateClassroomDto,schoolId);
   }
 
   @Delete(':id')
@@ -66,19 +76,10 @@ export class ClassroomController {
   @ApiResponse({ status: 200, description: 'The classroom has been successfully deleted.' })
   @ApiResponse({ status: 404, description: 'Classroom not found.' })
   @ApiParam({ name: 'id', required: true, description: 'Classroom ID' })
-  async remove(@Param('id') id: string) {
-    return this.classroomService.remove(id);
+  async remove(@Param('id') id: string,@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    return this.classroomService.remove(id,schoolId);
   }
 
-  @Post('subject')
-  @Roles('admin', 'teacher')
-  @ApiOperation({ summary: 'Create a new subject' })
-  @ApiResponse({ status: 201, description: 'The subject has been successfully created.' })
-  @ApiResponse({ status: 400, description: 'Bad Request.' })
-  @ApiBody({ type: CreateSubjectDto })
-  async createSubject(@Body(ValidationPipe) createSubjectDto: CreateSubjectDto) {
-    return this.classroomService.createSubject(createSubjectDto);
-  }
 
   @Get('time-table')
   @Roles('admin', 'teacher', 'student')

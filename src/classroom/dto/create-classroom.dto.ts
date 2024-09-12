@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsNumber, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsMongoId, IsArray, ArrayMinSize } from 'class-validator';
+import { Types } from 'mongoose';
 
 export class CreateClassroomDto {
   @ApiProperty({ description: 'The name of the classroom' })
@@ -7,23 +8,19 @@ export class CreateClassroomDto {
   @IsString()
   name: string;
 
-  @ApiProperty({ description: 'The capacity of the classroom' })
+  @ApiProperty({ description: 'The ID of the class teacher' })
   @IsNotEmpty()
-  @IsNumber()
-  capacity: number;
+  @IsMongoId()
+  classTeacherId: string;
 
-  @ApiProperty({ description: 'The building where the classroom is located' })
+  @ApiProperty({ description: 'An array of subject IDs', type: [String] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsMongoId({ each: true })
+  subjects: string[];
+
+  @ApiProperty({ description: 'The academic year of the classroom' })
   @IsNotEmpty()
   @IsString()
-  building: string;
-
-  @ApiProperty({ description: 'The room number of the classroom' })
-  @IsNotEmpty()
-  @IsString()
-  roomNumber: string;
-
-  @ApiProperty({ description: 'Additional equipment in the classroom', required: false })
-  @IsOptional()
-  @IsString()
-  equipment?: string;
+  academicYear: string;
 }

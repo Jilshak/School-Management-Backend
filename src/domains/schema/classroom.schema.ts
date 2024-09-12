@@ -8,14 +8,20 @@ export class Classroom {
   @Prop({ required: true })
   name: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Teacher', required: true })
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   classTeacherId: Types.ObjectId;
-
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'Student' }] })
-  students: Types.ObjectId[];
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Subject' }] })
   subjects: Types.ObjectId[];
+  
+  @Prop({ required: true })
+  academicYear: string;
+
+  @Prop({required:true,type:Types.ObjectId,ref:'School'})
+  schoolId:Types.ObjectId;
+
+  @Prop({type:Boolean,default:true})
+  isActive:boolean;
 }
 
 export const ClassroomSchema = SchemaFactory.createForClass(Classroom);

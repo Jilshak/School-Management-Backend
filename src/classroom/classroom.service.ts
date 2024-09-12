@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
-import { Model, Connection } from 'mongoose';
+import { Model, Connection, Types } from 'mongoose';
 import { Classroom, ClassroomDocument } from '../domains/schema/classroom.schema';
 import { Subject, SubjectDocument } from '../domains/schema/subject.schema';
 import { TimeTable, TimeTableDocument } from '../domains/schema/timetable.schema';
@@ -15,6 +15,8 @@ import { CreateTimeTableDto } from './dto/create-time-table.dto';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { CreateSyllabusDto } from './dto/create-syllabus.dto';
 import { CreateStudyMaterialDto } from './dto/create-study-material.dto';
+import { listFilter } from 'src/domains/utility/listFilter';
+import { Student } from 'src/domains/schema/students.schema';
 
 @Injectable()
 export class ClassroomService {
@@ -25,6 +27,7 @@ export class ClassroomService {
     @InjectModel(Attendance.name) private attendanceModel: Model<AttendanceDocument>,
     @InjectModel(Syllabus.name) private syllabusModel: Model<SyllabusDocument>,
     @InjectModel(StudyMaterial.name) private studyMaterialModel: Model<StudyMaterialDocument>,
+    @InjectModel(Student.name) private studentModel: Model<Student>,
     @InjectModel(Result.name) private resultModel: Model<ResultDocument>,
     @InjectConnection() private connection: Connection
   ) {}
@@ -38,7 +41,7 @@ export class ClassroomService {
     }
   }
 
-  async create(createClassroomDto: CreateClassroomDto): Promise<Classroom> {
+  async create(createClassroomDto: CreateClassroomDto,schoolId:Types.ObjectId): Promise<Classroom> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -47,8 +50,7 @@ export class ClassroomService {
         session = await this.connection.startSession();
         session.startTransaction();
       }
-
-      const createdClassroom = new this.classroomModel(createClassroomDto);
+      const createdClassroom = new this.classroomModel({...createClassroomDto,schoolId});
       const result = await createdClassroom.save({ session });
 
       if (session) {
@@ -67,7 +69,7 @@ export class ClassroomService {
     }
   }
 
-  async findAll(page?: number, limit?: number): Promise<Classroom[]> {
+  async findAll(schoolId: Types.ObjectId, search?: string, full?: boolean, page: number=1, limit: number=10): Promise<{ classrooms: Classroom[], totalCount: number }> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -77,19 +79,92 @@ export class ClassroomService {
         session.startTransaction();
       }
 
-      let query = this.classroomModel.find().session(session);
+      let aggregationPipeline:any = [
+        { $match: { schoolId: new Types.ObjectId(schoolId) } },
+        {
+          $lookup: {
+            from: 'teachers',
+            localField: 'classTeacherId',
+            foreignField: 'userId',
+            as: 'teacherDetails'
+          }
+        },
+        {
+          $unwind: '$teacherDetails'
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'classTeacherId',
+            foreignField: '_id',
+            as: 'userDetails'
+          }
+        },
+        {
+          $unwind: '$userDetails'
+        },
+        {
+          $lookup: {
+            from: 'subjects',
+            localField: 'subjects',
+            foreignField: '_id',
+            as: 'subjectDetails'
+          }
+        },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            academicYear: 1,
+            classTeacherDetails: {
+              name: { $concat: ['$teacherDetails.firstName', ' ', '$teacherDetails.lastName'] },
+              email: '$userDetails.email',
+              phoneNumber: '$userDetails.contactNumber'
+            },
+            subjects: {
+              $map: {
+                input: '$subjectDetails',
+                as: 'subject',
+                in: {
+                  _id: '$$subject._id',
+                  name: '$$subject.name',
+                  code: '$$subject.code'
+                }
+              }
+            }
+          }
+        }
+      ];
       
-      if (page !== undefined && limit !== undefined) {
+      if (search) {
+        aggregationPipeline.push({
+          $match: {
+            $or: [
+              { name: { $regex: search, $options: 'i' } },
+              { academicYear: { $regex: search, $options: 'i' } }
+            ]
+          }
+        });
+      }
+
+      const countPipeline = [...aggregationPipeline, { $count: 'totalCount' }];
+      const [countResult] = await this.classroomModel.aggregate(countPipeline).session(session);
+      const totalCount = countResult ? countResult.totalCount : 0;
+      
+      if (!full && page !== undefined && limit !== undefined) {
         const skip = (page - 1) * limit;
-        query = query.skip(skip).limit(limit);
+        aggregationPipeline.push({ $skip: skip }, { $limit: limit });
       }
       
-      const classrooms = await query.exec();
+      const classrooms = await this.classroomModel.aggregate(aggregationPipeline).session(session);
+
+      // Filter out classrooms where classTeacher doesn't match the search
+      const filteredClassrooms = classrooms.filter(classroom => classroom.classTeacherDetails && classroom.userDetails && classroom.userDetails.isActive);
 
       if (session) {
         await session.commitTransaction();
       }
-      return classrooms;
+      return { classrooms: filteredClassrooms, totalCount };
     } catch (error) {
       if (session) {
         await session.abortTransaction();
@@ -102,7 +177,7 @@ export class ClassroomService {
     }
   }
 
-  async findOne(id: string): Promise<Classroom> {
+  async findOne(id: string, schoolId: Types.ObjectId): Promise<any> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -112,15 +187,109 @@ export class ClassroomService {
         session.startTransaction();
       }
 
-      const classroom = await this.classroomModel.findById(id).session(session).exec();
-      if (!classroom) {
+      const classroom = await this.classroomModel.aggregate([
+        { $match: { _id: new Types.ObjectId(id), schoolId: schoolId } },
+        {
+          $lookup: {
+            from: 'teachers',
+            localField: 'classTeacherId',
+            foreignField: 'userId',
+            as: 'classTeacherDetails'
+          }
+        },
+        { $unwind: '$classTeacherDetails' },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'classTeacherDetails.userId',
+            foreignField: '_id',
+            as: 'classTeacherUserDetails'
+          }
+        },
+        { $unwind: '$classTeacherUserDetails' },
+        {
+          $lookup: {
+            from: 'students',
+            localField: '_id',
+            foreignField: 'classId',
+            as: 'studentsDetails'
+          }
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'studentsDetails.userId',
+            foreignField: '_id',
+            as: 'studentsUserDetails'
+          }
+        },
+        {
+          $lookup: {
+            from: 'subjects',
+            localField: 'subjects',
+            foreignField: '_id',
+            as: 'subjectsDetails'
+          }
+        },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            academicYear: 1,
+            classTeacher: {
+              _id: '$classTeacherDetails._id',
+              firstName: '$classTeacherDetails.firstName',
+              lastName: '$classTeacherDetails.lastName',
+              email: '$classTeacherUserDetails.email',
+              isActive: '$classTeacherUserDetails.isActive'
+            },
+            students: {
+              $map: {
+                input: '$studentsDetails',
+                as: 'student',
+                in: {
+                  _id: '$$student._id',
+                  firstName: '$$student.firstName',
+                  lastName: '$$student.lastName',
+                  enrollmentNumber: '$$student.enrollmentNumber',
+                  email: {
+                    $arrayElemAt: [
+                      '$studentsUserDetails.email',
+                      { $indexOfArray: ['$studentsUserDetails.userId', '$$student.userId'] }
+                    ]
+                  },
+                  isActive: {
+                    $arrayElemAt: [
+                      '$studentsUserDetails.isActive',
+                      { $indexOfArray: ['$studentsUserDetails.userId', '$$student.userId'] }
+                    ]
+                  }
+                }
+              }
+            },
+            subjects: {
+              $map: {
+                input: '$subjectsDetails',
+                as: 'subject',
+                in: {
+                  _id: '$$subject._id',
+                  subjectName: '$$subject.subjectName',
+                  isActive: '$$subject.isActive'
+                }
+              }
+            }
+          }
+        }
+      ]).session(session);
+
+      if (!classroom || classroom.length === 0) {
         throw new NotFoundException(`Classroom with ID ${id} not found`);
       }
 
       if (session) {
         await session.commitTransaction();
       }
-      return classroom;
+      return classroom[0];
     } catch (error) {
       if (session) {
         await session.abortTransaction();
@@ -136,7 +305,7 @@ export class ClassroomService {
     }
   }
 
-  async update(id: string, updateClassroomDto: UpdateClassroomDto): Promise<Classroom> {
+  async update(id: string, updateClassroomDto: UpdateClassroomDto,schoolId:Types.ObjectId): Promise<Classroom> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -146,7 +315,7 @@ export class ClassroomService {
         session.startTransaction();
       }
 
-      const updatedClassroom = await this.classroomModel.findByIdAndUpdate(id, updateClassroomDto, { new: true, session }).exec();
+      const updatedClassroom = await this.classroomModel.findOneAndUpdate({_id:new Types.ObjectId(id),schoolId}, updateClassroomDto, { new: true, session }).exec();
       if (!updatedClassroom) {
         throw new NotFoundException(`Classroom with ID ${id} not found`);
       }
@@ -170,7 +339,7 @@ export class ClassroomService {
     }
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, schoolId: Types.ObjectId): Promise<void> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -180,7 +349,13 @@ export class ClassroomService {
         session.startTransaction();
       }
 
-      const result = await this.classroomModel.findByIdAndDelete(id).session(session).exec();
+      // Check if there are any students in this classroom
+      const studentsInClassroom = await this.studentModel.findOne({ classId: new Types.ObjectId(id) }).session(session).exec();
+      if (studentsInClassroom) {
+        throw new Error('Cannot delete classroom. There are students assigned to this class. Please change their class before deleting.');
+      }
+
+      const result = await this.classroomModel.findOneAndUpdate({ _id: new Types.ObjectId(id), schoolId },{$set:{isActive:false}}).session(session).exec();
       if (!result) {
         throw new NotFoundException(`Classroom with ID ${id} not found`);
       }
@@ -194,6 +369,9 @@ export class ClassroomService {
       }
       if (error instanceof NotFoundException) {
         throw error;
+      }
+      if (error.message.includes('Cannot delete classroom')) {
+        throw new BadRequestException(error.message);
       }
       throw new InternalServerErrorException('Failed to remove classroom');
     } finally {
@@ -576,45 +754,45 @@ export class ClassroomService {
   async getStudentsPerformance(classroomId: string, subjectId?: string, startDate?: string, endDate?: string): Promise<any> {
     let session = null;
     try {
-      const supportsTransactions = await this.supportsTransactions();
+      // const supportsTransactions = await this.supportsTransactions();
       
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
+      // if (supportsTransactions) {
+      //   session = await this.connection.startSession();
+      //   session.startTransaction();
+      // }
 
-      const classroom = await this.classroomModel.findById(classroomId).populate('students').session(session).exec();
-      if (!classroom) {
-        throw new NotFoundException(`Classroom with ID ${classroomId} not found`);
-      }
+      // const classroom = await this.classroomModel.findById(classroomId).populate('students').session(session).exec();
+      // if (!classroom) {
+      //   throw new NotFoundException(`Classroom with ID ${classroomId} not found`);
+      // }
 
-      const studentIds = classroom.students.map(student => student._id);
-      let query = this.resultModel.find({ studentId: { $in: studentIds } }).session(session);
+      // const studentIds = classroom.students.map(student => student._id);
+      // let query = this.resultModel.find({ studentId: { $in: studentIds } }).session(session);
       
-      if (subjectId) {
-        query = query.where('subjectId').equals(subjectId);
-      }
+      // if (subjectId) {
+      //   query = query.where('subjectId').equals(subjectId);
+      // }
       
-      if (startDate && endDate) {
-        query = query.where('date').gte(new Date(startDate).getTime()).lte(new Date(endDate).getTime());
-      }
+      // if (startDate && endDate) {
+      //   query = query.where('date').gte(new Date(startDate).getTime()).lte(new Date(endDate).getTime());
+      // }
       
-      const results = await query.populate('examId').exec();
+      // const results = await query.populate('examId').exec();
 
-      // Process results to create a performance report
-      const performanceReport = studentIds.reduce((acc, studentId) => {
-        const studentResults = results.filter(result => result.studentId.toString() === studentId.toString());
-        acc[studentId.toString()] = {
-          averageScore: studentResults.reduce((sum, result) => sum + result.score, 0) / studentResults.length || 0,
-          examsTaken: studentResults.length
-        };
-        return acc;
-      }, {});
+      // // Process results to create a performance report
+      // const performanceReport = studentIds.reduce((acc, studentId) => {
+      //   const studentResults = results.filter(result => result.studentId.toString() === studentId.toString());
+      //   acc[studentId.toString()] = {
+      //     averageScore: studentResults.reduce((sum, result) => sum + result.score, 0) / studentResults.length || 0,
+      //     examsTaken: studentResults.length
+      //   };
+      //   return acc;
+      // }, {});
 
-      if (session) {
-        await session.commitTransaction();
-      }
-      return performanceReport;
+      // if (session) {
+      //   await session.commitTransaction();
+      // }
+      // return performanceReport;
     } catch (error) {
       if (session) {
         await session.abortTransaction();

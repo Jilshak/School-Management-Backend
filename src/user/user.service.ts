@@ -160,7 +160,7 @@ export class UserService {
     }
   }
 
-  async findAll(role: string[], schoolId: Types.ObjectId) {
+  async findAll(role: string[], schoolId: Types.ObjectId, full: boolean = false, page: number = 1, limit: number = 10) {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -170,27 +170,85 @@ export class UserService {
         session.startTransaction();
       }
 
-      let users = await this.userModel.find({ role: { $in: role }, schoolId }).session(session).exec();
+      const query = { role: { $in: role }, schoolId };
+      const totalCount = await this.userModel.countDocuments(query).session(session);
 
-      const enhancedUsers = await Promise.all(users.map(async (x) => {
-        const userObject = x.toObject();
-        if (x.role === UserRole.STAFF) {
-          const temp = await this.staffModel.findOne({ userId: x._id }).lean().session(session).exec();
-          return { ...userObject, ...temp };
-        } else if (x.role === UserRole.TEACHER) {
-          const temp = await this.teacherModel.findOne({ userId: x._id }).lean().session(session).exec();
-          return { ...userObject, ...temp };
-        }else if(x.role===UserRole.STUDENT){
-          const temp = await this.studentModel.findOne({ userId: x._id }).lean().session(session).exec();
-          return { ...userObject, ...temp };
+      let aggregatePipeline:any = [
+        { $match: query },
+        {
+          $lookup: {
+            from: 'staffs',
+            localField: '_id',
+            foreignField: 'userId',
+            as: 'staffDetails'
+          }
+        },
+        {
+          $lookup: {
+            from: 'teachers',
+            localField: '_id',
+            foreignField: 'userId',
+            as: 'teacherDetails'
+          }
+        },
+        {
+          $lookup: {
+            from: 'students',
+            localField: '_id',
+            foreignField: 'userId',
+            as: 'studentDetails'
+          }
+        },
+        {
+          $addFields: {
+            additionalDetails: {
+              $cond: [
+                { $eq: ["$role", UserRole.STAFF] },
+                { $arrayElemAt: ["$staffDetails", 0] },
+                {
+                  $cond: [
+                    { $eq: ["$role", UserRole.TEACHER] },
+                    { $arrayElemAt: ["$teacherDetails", 0] },
+                    {
+                      $cond: [
+                        { $eq: ["$role", UserRole.STUDENT] },
+                        { $arrayElemAt: ["$studentDetails", 0] },
+                        {}
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          $replaceRoot: {
+            newRoot: {
+              $mergeObjects: ["$$ROOT", "$additionalDetails"]
+            }
+          }
+        },
+        {
+          $project: {
+            staffDetails: 0,
+            teacherDetails: 0,
+            studentDetails: 0
+          }
         }
-        return userObject;
-      }));
+      ];
+
+      if (!full) {
+        const skip = (page - 1) * limit;
+        aggregatePipeline.push({ $skip: skip }, { $limit: limit });
+      }
+
+      const enhancedUsers = await this.userModel.aggregate(aggregatePipeline).session(session);
 
       if (session) {
         await session.commitTransaction();
       }
-      return enhancedUsers;
+      return { enhancedUsers, totalCount };
     } catch (error) {
       if (session) {
         await session.abortTransaction();

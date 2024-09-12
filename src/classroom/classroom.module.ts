@@ -10,6 +10,7 @@ import { Syllabus, SyllabusSchema } from '../domains/schema/syllabus.schema';
 import { StudyMaterial, StudyMaterialSchema } from '../domains/schema/study-material.schema';
 import { Result, ResultSchema } from '../domains/schema/result.schema';
 import { RolesGuard } from '../shared/guards/roles.guard';
+import { Student, StudentSchema } from 'src/domains/schema/students.schema';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { RolesGuard } from '../shared/guards/roles.guard';
       { name: Syllabus.name, schema: SyllabusSchema },
       { name: StudyMaterial.name, schema: StudyMaterialSchema },
       { name: Result.name, schema: ResultSchema },
+      { name: Student.name, schema: StudentSchema },
     ]),
   ],
   controllers: [ClassroomController],
