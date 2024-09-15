@@ -66,7 +66,7 @@ export class ClassroomController {
   @ApiResponse({ status: 400, description: 'Bad Request.' })
   @ApiResponse({ status: 404, description: 'Classroom not found.' })
   @ApiParam({ name: 'id', required: true, description: 'Classroom ID' })
-  async update(@Param('id') id: string, @Body(ValidationPipe) updateClassroomDto: UpdateClassroomDto,@LoginUser('schoolId') schoolId:Types.ObjectId) {
+  async update(@Param('id') id: string, @Body(ValidationPipe) updateClassroomDto: CreateClassroomDto,@LoginUser('schoolId') schoolId:Types.ObjectId) {
     return this.classroomService.update(id, updateClassroomDto,schoolId);
   }
 
@@ -76,8 +76,8 @@ export class ClassroomController {
   @ApiResponse({ status: 200, description: 'The classroom has been successfully deleted.' })
   @ApiResponse({ status: 404, description: 'Classroom not found.' })
   @ApiParam({ name: 'id', required: true, description: 'Classroom ID' })
-  async remove(@Param('id') id: string,@LoginUser("schoolId") schoolId:Types.ObjectId) {
-    return this.classroomService.remove(id,schoolId);
+  async remove(@Param('id') id: string,@LoginUser("schoolId") schoolId:Types.ObjectId,@Body("makeStudentsAlsoInactive") makeStudentsAlsoInactive:boolean) {
+    return this.classroomService.remove(id,schoolId,makeStudentsAlsoInactive);
   }
 
 

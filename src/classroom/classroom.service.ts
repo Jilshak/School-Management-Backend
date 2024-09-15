@@ -17,6 +17,7 @@ import { CreateSyllabusDto } from './dto/create-syllabus.dto';
 import { CreateStudyMaterialDto } from './dto/create-study-material.dto';
 import { listFilter } from 'src/domains/utility/listFilter';
 import { Student } from 'src/domains/schema/students.schema';
+import { User } from 'src/domains/schema/user.schema';
 
 @Injectable()
 export class ClassroomService {
@@ -29,6 +30,7 @@ export class ClassroomService {
     @InjectModel(StudyMaterial.name) private studyMaterialModel: Model<StudyMaterialDocument>,
     @InjectModel(Student.name) private studentModel: Model<Student>,
     @InjectModel(Result.name) private resultModel: Model<ResultDocument>,
+    @InjectModel(User.name) private userModel: Model<User>,
     @InjectConnection() private connection: Connection
   ) {}
 
@@ -305,7 +307,7 @@ export class ClassroomService {
     }
   }
 
-  async update(id: string, updateClassroomDto: UpdateClassroomDto,schoolId:Types.ObjectId): Promise<Classroom> {
+  async update(id: string, updateClassroomDto: CreateClassroomDto,schoolId:Types.ObjectId): Promise<Classroom> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -339,7 +341,7 @@ export class ClassroomService {
     }
   }
 
-  async remove(id: string, schoolId: Types.ObjectId): Promise<void> {
+  async remove(id: string, schoolId: Types.ObjectId, makeStudentsAlsoInactive: boolean): Promise<void> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -350,12 +352,24 @@ export class ClassroomService {
       }
 
       // Check if there are any students in this classroom
-      const studentsInClassroom = await this.studentModel.findOne({ classId: new Types.ObjectId(id) }).session(session).exec();
-      if (studentsInClassroom) {
+      const studentsInClassroom = await this.studentModel.find({ classId: new Types.ObjectId(id) }).session(session).exec();
+
+      if (makeStudentsAlsoInactive) {
+        // Make all students in the classroom inactive
+        await this.userModel.updateMany(
+          { classId: new Types.ObjectId(id) },
+          { $set: { isActive: false } }
+        ).session(session).exec();
+      } else if (studentsInClassroom.length > 0) {
         throw new Error('Cannot delete classroom. There are students assigned to this class. Please change their class before deleting.');
       }
 
-      const result = await this.classroomModel.findOneAndUpdate({ _id: new Types.ObjectId(id), schoolId },{$set:{isActive:false}}).session(session).exec();
+      // Make the classroom inactive
+      const result = await this.classroomModel.findOneAndUpdate(
+        { _id: new Types.ObjectId(id), schoolId },
+        { $set: { isActive: false } }
+      ).session(session).exec();
+
       if (!result) {
         throw new NotFoundException(`Classroom with ID ${id} not found`);
       }

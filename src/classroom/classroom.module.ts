@@ -11,6 +11,7 @@ import { StudyMaterial, StudyMaterialSchema } from '../domains/schema/study-mate
 import { Result, ResultSchema } from '../domains/schema/result.schema';
 import { RolesGuard } from '../shared/guards/roles.guard';
 import { Student, StudentSchema } from 'src/domains/schema/students.schema';
+import { User, UserSchema } from 'src/domains/schema/user.schema';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { Student, StudentSchema } from 'src/domains/schema/students.schema';
       { name: StudyMaterial.name, schema: StudyMaterialSchema },
       { name: Result.name, schema: ResultSchema },
       { name: Student.name, schema: StudentSchema },
+      { name: User.name, schema: UserSchema },
     ]),
   ],
   controllers: [ClassroomController],
