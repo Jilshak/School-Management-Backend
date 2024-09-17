@@ -5,7 +5,7 @@ import { SchoolService } from './school.service';
 import { School, SchoolSchema } from 'src/domains/schema/school.schema';
 import { Class, ClassSchema } from 'src/domains/schema/class.schema';
 import { Section, SectionSchema } from 'src/domains/schema/section.schema';
-import { RolesGuard } from '../shared/guards/roles.guard';
+import { GuardsModule } from '../guards/guards.module';
 
 @Module({
   imports: [
@@ -14,8 +14,9 @@ import { RolesGuard } from '../shared/guards/roles.guard';
       { name: Class.name, schema: ClassSchema },
       { name: Section.name, schema: SectionSchema },
     ]),
+    GuardsModule,
   ],
   controllers: [SchoolController],
-  providers: [SchoolService, RolesGuard],
+  providers: [SchoolService],
 })
 export class SchoolModule {}

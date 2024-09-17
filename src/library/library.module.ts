@@ -5,7 +5,7 @@ import { LibraryService } from './library.service';
 import { Book, BookSchema } from 'src/domains/schema/book.schema';
 import { Reservation, ReservationSchema } from 'src/domains/schema/reservation.schema';
 import { Fine, FineSchema } from 'src/domains/schema/fine.schema';
-import { RolesGuard } from '../shared/guards/roles.guard';
+import { GuardsModule } from '../guards/guards.module';
 
 @Module({
   imports: [
@@ -14,8 +14,9 @@ import { RolesGuard } from '../shared/guards/roles.guard';
       { name: Reservation.name, schema: ReservationSchema },
       { name: Fine.name, schema: FineSchema },
     ]),
+    GuardsModule,
   ],
   controllers: [LibraryController],
-  providers: [LibraryService, RolesGuard],
+  providers: [LibraryService],
 })
 export class LibraryModule {}

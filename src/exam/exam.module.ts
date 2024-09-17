@@ -5,7 +5,7 @@ import { ExamService } from './exam.service';
 import { Exam, ExamSchema } from '../domains/schema/exam.schema';
 import { ExamTimeTable, ExamTimeTableSchema } from '../domains/schema/exam-time-table.schema';
 import { Result, ResultSchema } from '../domains/schema/result.schema';
-import { RolesGuard } from '../shared/guards/roles.guard';
+import { GuardsModule } from '../guards/guards.module';
 
 @Module({
   imports: [
@@ -14,8 +14,9 @@ import { RolesGuard } from '../shared/guards/roles.guard';
       { name: ExamTimeTable.name, schema: ExamTimeTableSchema },
       { name: Result.name, schema: ResultSchema },
     ]),
+    GuardsModule,
   ],
   controllers: [ExamController],
-  providers: [ExamService, RolesGuard],
+  providers: [ExamService],
 })
 export class ExamModule {}

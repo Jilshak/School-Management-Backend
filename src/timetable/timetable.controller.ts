@@ -1,11 +1,13 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, ValidationPipe, Query } from '@nestjs/common';
 import { TimetableService } from './timetable.service';
 import { CreateTimetableDto } from './dto/create-timetable.dto';
 import { UpdateTimetableDto } from './dto/update-timetable.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../shared/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
+import { Types } from 'mongoose';
 
 @ApiTags('timetable')
 @ApiBearerAuth()
@@ -19,48 +21,57 @@ export class TimetableController {
   @ApiOperation({ summary: 'Create a new timetable' })
   @ApiResponse({ status: 201, description: 'The timetable has been successfully created.' })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
-  @ApiBody({ type: CreateTimetableDto })
-  create(@Body() createTimetableDto: CreateTimetableDto) {
-    return this.timetableService.create(createTimetableDto);
+  @ApiBody({ type: CreateTimetableDto,description:"Upsert Functionality" })
+  create(@Body(ValidationPipe) createTimetableDto: CreateTimetableDto,@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    return this.timetableService.create(createTimetableDto,schoolId);
+  }
+
+
+  
+  @Get('/teacher-available')
+  @Roles('admin', 'teacher')
+  @ApiOperation({ summary: 'Get available staff for a given time slot' })
+  @ApiResponse({ status: 200, description: 'Return the available staff.' })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiQuery({ name: 'startTime', required: true, type: Date })
+  @ApiQuery({ name: 'endTime', required: true, type: Date })
+  @ApiQuery({ name: 'subjectId', required: true, type: String })
+  findStaffAvailable(
+    @Query('startTime') startTime: Date,
+    @Query('endTime') endTime: Date,
+    @Query('subjectId') subjectId: string,
+    @LoginUser('schoolId') schoolId: Types.ObjectId
+  ) {
+    return this.timetableService.findAvailableTeacher(startTime, endTime, subjectId, schoolId);
   }
 
   @Get()
   @Roles('admin', 'teacher', 'student')
   @ApiOperation({ summary: 'Get all timetables' })
   @ApiResponse({ status: 200, description: 'Return all timetables.' })
-  findAll() {
-    return this.timetableService.findAll();
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'full', required: false, type: Boolean })
+  findAll(
+    @LoginUser("schoolId") schoolId: Types.ObjectId,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('full') full?: boolean
+  ) {
+    return this.timetableService.findAll(schoolId, page, limit, full);
   }
 
-  @Get(':id')
-  @Roles('admin', 'teacher', 'student')
+  @Get(':classId')
+  @Roles()
   @ApiOperation({ summary: 'Get a timetable by id' })
   @ApiResponse({ status: 200, description: 'Return the timetable.' })
   @ApiResponse({ status: 404, description: 'Timetable not found.' })
-  @ApiParam({ name: 'id', required: true, description: 'Timetable ID' })
-  findOne(@Param('id') id: string) {
-    return this.timetableService.findOne(id);
+  @ApiParam({ name: 'classId', required: true, description: 'Classroom ID' })
+  findOne(@Param('classId') id: string,@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    return this.timetableService.findOne(id,schoolId);
   }
 
-  @Put(':id')
-  @Roles('admin', 'teacher')
-  @ApiOperation({ summary: 'Update a timetable' })
-  @ApiResponse({ status: 200, description: 'The timetable has been successfully updated.' })
-  @ApiResponse({ status: 400, description: 'Bad Request.' })
-  @ApiResponse({ status: 404, description: 'Timetable not found.' })
-  @ApiParam({ name: 'id', required: true, description: 'Timetable ID' })
-  @ApiBody({ type: UpdateTimetableDto })
-  update(@Param('id') id: string, @Body() updateTimetableDto: UpdateTimetableDto) {
-    return this.timetableService.update(id, updateTimetableDto);
-  }
 
-  @Delete(':id')
-  @Roles('admin')
-  @ApiOperation({ summary: 'Delete a timetable' })
-  @ApiResponse({ status: 200, description: 'The timetable has been successfully deleted.' })
-  @ApiResponse({ status: 404, description: 'Timetable not found.' })
-  @ApiParam({ name: 'id', required: true, description: 'Timetable ID' })
-  remove(@Param('id') id: string) {
-    return this.timetableService.remove(id);
-  }
+
+ 
 }

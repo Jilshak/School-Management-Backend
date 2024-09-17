@@ -1,15 +1,28 @@
-import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
-import { Model, Connection } from 'mongoose';
-import { TimeTable, TimeTableDocument } from '../domains/schema/timetable.schema';
+import { Model, Connection, Types } from 'mongoose';
+import {
+  TimeTable,
+  TimeTableDocument,
+} from '../domains/schema/timetable.schema';
 import { CreateTimetableDto } from './dto/create-timetable.dto';
 import { UpdateTimetableDto } from './dto/update-timetable.dto';
+import { User } from 'src/domains/schema/user.schema';
+import { UserRole } from 'src/domains/enums/user-roles.enum';
 
 @Injectable()
 export class TimetableService {
   constructor(
-    @InjectModel(TimeTable.name) private timetableModel: Model<TimeTableDocument>,
-    @InjectConnection() private connection: Connection
+    @InjectModel(TimeTable.name)
+    private timetableModel: Model<TimeTableDocument>,
+    @InjectConnection() private connection: Connection,
+    @InjectModel(User.name)
+    private userModel: Model<User>,
   ) {}
 
   private async supportsTransactions(): Promise<boolean> {
@@ -21,51 +34,308 @@ export class TimetableService {
     }
   }
 
-  async create(createTimetableDto: CreateTimetableDto): Promise<TimeTable> {
+  async create(
+    createTimetableDto: CreateTimetableDto,
+    schoolId: Types.ObjectId,
+  ): Promise<TimeTable> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const createdTimetable = new this.timetableModel(createTimetableDto);
-      const result = await createdTimetable.save({ session });
+      const modifiedDto = this.convertIdsToObjectId(
+        createTimetableDto,
+        schoolId,
+      );
+      await this.checkTeacherConflicts(modifiedDto, schoolId, session);
 
-      if (session) {
-        await session.commitTransaction();
-      }
+      const filter = { classId: modifiedDto.classId, schoolId: modifiedDto.schoolId };
+      const update = { $set: modifiedDto };
+      const options = { upsert: true, new: true, session };
+
+      const result = await this.timetableModel.findOneAndUpdate(filter, update, options);
+
+      if (session) await session.commitTransaction();
       return result;
     } catch (error) {
-      if (session) {
-        await session.abortTransaction();
+      if (session) await session.abortTransaction();
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
       }
-      throw new InternalServerErrorException('Failed to create timetable');
+      throw new InternalServerErrorException('Failed to create or update timetable');
     } finally {
-      if (session) {
-        session.endSession();
-      }
+      if (session) session.endSession();
     }
   }
 
-  async findAll(): Promise<TimeTable[]> {
+  private convertIdsToObjectId(
+    dto: CreateTimetableDto,
+    schoolId: Types.ObjectId,
+  ) {
+    const days = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+    ];
+    return {
+      ...dto,
+      schoolId,
+      classId: new Types.ObjectId(dto.classId),
+      ...Object.fromEntries(
+        days.map((day) => [
+          day,
+          dto[day].map((slot) => ({
+            ...slot,
+            subjectId: new Types.ObjectId(slot.subjectId),
+            teacherId: new Types.ObjectId(slot.teacherId),
+          })),
+        ]),
+      ),
+    };
+  }
+
+  private async checkTeacherConflicts(
+    dto: any,
+    schoolId: Types.ObjectId,
+    session: any,
+  ) {
+    try {
+      const days = [
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday',
+      ];
+      for (const day of days) {
+        for (const slot of dto[day]) {
+          const conflict = await this.timetableModel
+            .findOne({
+              schoolId,
+              [day]: {
+                $elemMatch: {
+                  teacherId: slot.teacherId,
+                  startTime: slot.startTime,
+                  endTime: slot.endTime,
+                },
+              },
+            })
+            .session(session);
+
+          if (conflict) {
+            throw new Error(
+              `Teacher ${slot.teacherId} is already assigned on ${day} from ${slot.startTime} to ${slot.endTime}`,
+            );
+          }
+        }
+      }
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async findAvailableTeacher(startTime: Date, endTime: Date, subjectId: string, schoolId: Types.ObjectId): Promise<User[]> {
+    const session = await this.connection.startSession();
+    try {
+      session.startTransaction();
+
+      // Find all teachers who teach the given subject
+      const teachers = await this.userModel.aggregate([
+        {
+          $match: {
+            roles: UserRole.TEACHER,
+            schoolId: schoolId,
+            isActive: true
+          }
+        },
+        {
+          $lookup: {
+            from: 'teachers',
+            localField: '_id',
+            foreignField: 'userId',
+            as: 'teacherDetails'
+          }
+        },
+        {
+          $unwind: '$teacherDetails'
+        },
+        {
+          $match: {
+            'teacherDetails.subjects': new Types.ObjectId(subjectId)
+          }
+        },
+        {
+          $lookup: {
+            from: 'staffs',
+            localField: '_id',
+            foreignField: 'userId',
+            as: 'staffDetails'
+          }
+        },
+        {
+          $unwind: '$staffDetails'
+        }
+      ]).session(session);
+
+      // Find all timetables that have slots conflicting with the given time
+      const conflictingTimetables = await this.timetableModel.find({
+        schoolId: schoolId,
+        $or: [
+          { monday: { $elemMatch: { $or: [
+            { startTime: { $lt: endTime }, endTime: { $gt: startTime } },
+            { startTime: { $gte: startTime, $lt: endTime } },
+            { endTime: { $gt: startTime, $lte: endTime } }
+          ] } } },
+          { tuesday: { $elemMatch: { $or: [
+            { startTime: { $lt: endTime }, endTime: { $gt: startTime } },
+            { startTime: { $gte: startTime, $lt: endTime } },
+            { endTime: { $gt: startTime, $lte: endTime } }
+          ] } } },
+          { wednesday: { $elemMatch: { $or: [
+            { startTime: { $lt: endTime }, endTime: { $gt: startTime } },
+            { startTime: { $gte: startTime, $lt: endTime } },
+            { endTime: { $gt: startTime, $lte: endTime } }
+          ] } } },
+          { thursday: { $elemMatch: { $or: [
+            { startTime: { $lt: endTime }, endTime: { $gt: startTime } },
+            { startTime: { $gte: startTime, $lt: endTime } },
+            { endTime: { $gt: startTime, $lte: endTime } }
+          ] } } },
+          { friday: { $elemMatch: { $or: [
+            { startTime: { $lt: endTime }, endTime: { $gt: startTime } },
+            { startTime: { $gte: startTime, $lt: endTime } },
+            { endTime: { $gt: startTime, $lte: endTime } }
+          ] } } },
+          { saturday: { $elemMatch: { $or: [
+            { startTime: { $lt: endTime }, endTime: { $gt: startTime } },
+            { startTime: { $gte: startTime, $lt: endTime } },
+            { endTime: { $gt: startTime, $lte: endTime } }
+          ] } } }
+        ]
+      }).session(session);
+
+      // Get the IDs of teachers who are not available
+      const unavailableTeacherIds = conflictingTimetables.flatMap(timetable => 
+        Object.values(timetable.toObject())
+          .filter(Array.isArray)
+          .flat()
+          .filter(slot => slot && slot.teacherId)
+          .map(slot => slot.teacherId.toString())
+      );
+
+      // Filter out unavailable teachers
+      const availableTeachers = teachers.filter(teacher => 
+        !unavailableTeacherIds.includes(teacher._id.toString())
+      );
+
+      await session.commitTransaction();
+      return availableTeachers;
+    } catch (error) {
+      await session.abortTransaction();
+      throw new InternalServerErrorException('Failed to find available staff');
+    } finally {
+      session.endSession();
+    }
+  }
+
+  async findAll(schoolId: Types.ObjectId, page?: number, limit?: number, full?: boolean): Promise<{ timetables: any[], total?: number, page?: number, limit?: number }> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const timetables = await this.timetableModel.find().session(session).exec();
+      const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-      if (session) {
-        await session.commitTransaction();
+      const aggregationPipeline:any = [
+        { $match: { schoolId: schoolId } },
+        {
+          $lookup: {
+            from: 'classrooms',
+            localField: 'classId',
+            foreignField: '_id',
+            as: 'classroomDetails'
+          }
+        },
+        { $unwind: '$classroomDetails' },
+        // Lookup stages for teachers and subjects for each day
+        ...days.flatMap(day => [
+          {
+            $lookup: {
+              from: 'users',
+              localField: `${day}.teacherId`,
+              foreignField: '_id',
+              as: `${day}Teachers`
+            }
+          },
+          {
+            $lookup: {
+              from: 'subjects',
+              localField: `${day}.subjectId`,
+              foreignField: '_id',
+              as: `${day}Subjects`
+            }
+          }
+        ]),
+        {
+          $project: {
+            classId: 1,
+            classroomDetails: 1,
+            // Project stages for each day
+            ...Object.fromEntries(days.map(day => [
+              day,
+              {
+                $map: {
+                  input: `$${day}`,
+                  as: 'slot',
+                  in: {
+                    $mergeObjects: [
+                      '$$slot',
+                      {
+                        teacher: { $arrayElemAt: [`$${day}Teachers`, { $indexOfArray: [`$${day}.teacherId`, '$$slot.teacherId'] }] },
+                        subject: { $arrayElemAt: [`$${day}Subjects`, { $indexOfArray: [`$${day}.subjectId`, '$$slot.subjectId'] }] }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]))
+          }
+        }
+      ];
+
+      if (!full) {
+        const total = await this.timetableModel.countDocuments({ schoolId });
+        page = page || 1;
+        limit = limit || 10;
+        const skip = (page - 1) * limit;
+
+        aggregationPipeline.push({ $skip: skip }, { $limit: limit });
+
+        const timetables = await this.timetableModel.aggregate(aggregationPipeline).session(session);
+
+        if (session) {
+          await session.commitTransaction();
+        }
+        return { timetables, total, page, limit };
+      } else {
+        const timetables = await this.timetableModel.aggregate(aggregationPipeline).session(session);
+
+        if (session) {
+          await session.commitTransaction();
+        }
+        return { timetables };
       }
-      return timetables;
     } catch (error) {
       if (session) {
         await session.abortTransaction();
@@ -78,19 +348,79 @@ export class TimetableService {
     }
   }
 
-  async findOne(id: string): Promise<TimeTable> {
+  async findOne(id: string, schoolId: Types.ObjectId): Promise<any> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const timetable = await this.timetableModel.findById(id).session(session).exec();
+      const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+      const aggregationPipeline: any = [
+        { $match: { classId: new Types.ObjectId(id), schoolId: schoolId } },
+        {
+          $lookup: {
+            from: 'classrooms',
+            localField: 'classId',
+            foreignField: '_id',
+            as: 'classroomDetails'
+          }
+        },
+        { $unwind: '$classroomDetails' },
+        // Lookup stages for teachers and subjects for each day
+        ...days.flatMap(day => [
+          {
+            $lookup: {
+              from: 'users',
+              localField: `${day}.teacherId`,
+              foreignField: '_id',
+              as: `${day}Teachers`
+            }
+          },
+          {
+            $lookup: {
+              from: 'subjects',
+              localField: `${day}.subjectId`,
+              foreignField: '_id',
+              as: `${day}Subjects`
+            }
+          }
+        ]),
+        {
+          $project: {
+            classId: 1,
+            classroomDetails: 1,
+            // Project stages for each day
+            ...Object.fromEntries(days.map(day => [
+              day,
+              {
+                $map: {
+                  input: `$${day}`,
+                  as: 'slot',
+                  in: {
+                    $mergeObjects: [
+                      '$$slot',
+                      {
+                        teacher: { $arrayElemAt: [`$${day}Teachers`, { $indexOfArray: [`$${day}.teacherId`, '$$slot.teacherId'] }] },
+                        subject: { $arrayElemAt: [`$${day}Subjects`, { $indexOfArray: [`$${day}.subjectId`, '$$slot.subjectId'] }] }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]))
+          }
+        }
+      ];
+
+      const [timetable] = await this.timetableModel.aggregate(aggregationPipeline).session(session);
+
       if (!timetable) {
-        throw new NotFoundException(`Timetable with ID ${id} not found`);
+        throw new NotFoundException(`Timetable for class with ID ${id} not found`);
       }
 
       if (session) {
@@ -112,21 +442,22 @@ export class TimetableService {
     }
   }
 
-  async update(id: string, updateTimetableDto: UpdateTimetableDto): Promise<TimeTable> {
+  async update(
+    id: string,
+    updateTimetableDto: UpdateTimetableDto,
+  ): Promise<TimeTable> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const updatedTimetable = await this.timetableModel.findByIdAndUpdate(
-        id, 
-        updateTimetableDto, 
-        { new: true, session }
-      ).exec();
+      const updatedTimetable = await this.timetableModel
+        .findByIdAndUpdate(id, updateTimetableDto, { new: true, session })
+        .exec();
       if (!updatedTimetable) {
         throw new NotFoundException(`Timetable with ID ${id} not found`);
       }
@@ -154,13 +485,16 @@ export class TimetableService {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const result = await this.timetableModel.findByIdAndDelete(id).session(session).exec();
+      const result = await this.timetableModel
+        .findByIdAndDelete(id)
+        .session(session)
+        .exec();
       if (!result) {
         throw new NotFoundException(`Timetable with ID ${id} not found`);
       }

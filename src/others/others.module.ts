@@ -7,7 +7,7 @@ import { Event, EventSchema } from '../domains/schema/event.schema';
 import { Todo, TodoSchema } from '../domains/schema/todo.schema';
 import { Travel, TravelSchema } from '../domains/schema/travel.schema';
 import { Mess, MessSchema } from '../domains/schema/mess.schema';
-import { RolesGuard } from '../shared/guards/roles.guard';
+import { GuardsModule } from '../guards/guards.module';
 
 @Module({
   imports: [
@@ -18,8 +18,9 @@ import { RolesGuard } from '../shared/guards/roles.guard';
       { name: Travel.name, schema: TravelSchema },
       { name: Mess.name, schema: MessSchema },
     ]),
+    GuardsModule,
   ],
   controllers: [OthersController],
-  providers: [OthersService, RolesGuard],
+  providers: [OthersService],
 })
 export class OthersModule {}

@@ -1,14 +1,18 @@
 import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
-import { Model, Connection } from 'mongoose';
+import { Model, Connection, Types } from 'mongoose';
 import { Account } from 'src/domains/schema/account.schema';
-import { CreateAccountDto } from './dto/create-account.dto';
+import { CreateAccountDto, CreatePaymentDueDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
+import { FeeType } from 'src/domains/schema/feeType.schema';
+import { PaymentDue } from 'src/domains/schema/paymentdue.schema';
 
 @Injectable()
 export class AccountsService {
   constructor(
     @InjectModel(Account.name) private accountModel: Model<Account>,
+    @InjectModel(FeeType.name) private feeModel: Model<FeeType>,
+    @InjectModel(PaymentDue.name) private paymentDueModel: Model<PaymentDue>,
     @InjectConnection() private connection: Connection
   ) {}
 
@@ -21,7 +25,7 @@ export class AccountsService {
     }
   }
 
-  async create(createAccountDto: CreateAccountDto): Promise<Account> {
+  async createSendDue(createPaymentDueDto: CreatePaymentDueDto,schoolId:Types.ObjectId,userId:Types.ObjectId): Promise<any> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -30,14 +34,13 @@ export class AccountsService {
         session = await this.connection.startSession();
         session.startTransaction();
       }
-
-      const createdAccount = new this.accountModel(createAccountDto);
-      const result = await createdAccount.save({ session });
-
+      const temp =new this.paymentDueModel({...createPaymentDueDto,userId:new Types.ObjectId(createPaymentDueDto.userId),schoolId,createdBy:new Types.ObjectId(userId),updatedBy:new Types.ObjectId(userId)})
+      
+      await temp.save({session})
       if (session) {
         await session.commitTransaction();
       }
-      return result;
+      return ;
     } catch (error) {
       if (session) {
         await session.abortTransaction();
@@ -172,6 +175,174 @@ export class AccountsService {
         throw error;
       }
       throw new InternalServerErrorException('Failed to remove account');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async createFeeType(feeType: { name: string; amount: number; description?: string }, schoolId: Types.ObjectId): Promise<FeeType> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const isExist = await this.feeModel.findOne({ name: feeType.name, schoolId }).session(session);
+      if (isExist) {
+        throw new Error("Fee Type Already Exists");
+      }
+
+      const fee = new this.feeModel({ ...feeType, schoolId });
+      const result = await fee.save({ session });
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return result;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      throw new InternalServerErrorException('Failed to create fee type');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async getFeeTypes(schoolId: Types.ObjectId): Promise<FeeType[]> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const feeTypes = await this.feeModel.find({ schoolId,isActive:true }).session(session).exec();
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return feeTypes;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      throw new InternalServerErrorException('Failed to fetch fee types');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async getFeeTypeById(id: string, schoolId: Types.ObjectId): Promise<FeeType> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const feeType = await this.feeModel.findOne({ _id:new Types.ObjectId(id), schoolId }).session(session).exec();
+      if (!feeType) {
+        throw new NotFoundException(`Fee Type with ID ${id} not found`);
+      }
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return feeType;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to fetch fee type');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async updateFeeType(id: string, updateData: Partial<FeeType>, schoolId: Types.ObjectId): Promise<FeeType> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const updatedFeeType = await this.feeModel.findOneAndUpdate(
+        { _id:new Types.ObjectId(id), schoolId },
+        updateData,
+        { new: true, session }
+      ).exec();
+
+      if (!updatedFeeType) {
+        throw new NotFoundException(`Fee Type with ID ${id} not found`);
+      }
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return updatedFeeType;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to update fee type');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async deleteFeeType(id: string, schoolId: Types.ObjectId): Promise<void> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const result = await this.feeModel.findOneAndUpdate({ _id:new Types.ObjectId(id), schoolId },{$set:{isActive:false}}).session(session).exec();
+      if (!result) {
+        throw new NotFoundException(`Fee Type with ID ${id} not found`);
+      }
+
+      if (session) {
+        await session.commitTransaction();
+      }
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to delete fee type');
     } finally {
       if (session) {
         session.endSession();

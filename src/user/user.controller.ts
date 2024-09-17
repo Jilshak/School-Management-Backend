@@ -1,25 +1,27 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, Patch } from '@nestjs/common';
 import { UserService } from './user.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../shared/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { User } from '../domains/schema/user.schema';
 import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
+import { Types } from 'mongoose';
+import { UserRole } from 'src/domains/enums/user-roles.enum';
 
-@ApiTags('users')
+@ApiTags('user')
 @ApiBearerAuth()
-@Controller('users')
+@Controller('user')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  @Roles('admin','superadmin')
+  @Roles('admin','superadmin',UserRole.HR)
   @ApiOperation({ summary: 'Create a new user' })
-  @ApiResponse({ status: 201, description: 'The user has been successfully created.', type: User })
+  @ApiResponse({ status: 201, description: 'The user has been successfully created.', type: String })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
   @ApiBody({ type: CreateUserDto })
   create(@Body() createUserDto: CreateUserDto,@LoginUser("schoolId") schoolId) {
@@ -27,11 +29,76 @@ export class UserController {
   }
 
   @Get()
-  @Roles('admin')
+  @Roles(UserRole.ADMIN,UserRole.HR)
   @ApiOperation({ summary: 'Get all users' })
   @ApiResponse({ status: 200, description: 'Return all users.', type: [User] })
-  findAll(@Query() role:string[],@LoginUser("schoolId") schoolId) {
-    return this.userService.findAll(role,schoolId);
+  @ApiQuery({ 
+    name: 'role', 
+    required: false, 
+    enum: UserRole, 
+    isArray: true, 
+    description: 'Filter users by role.',
+    type: [String],
+    example: [UserRole.ADMIN, UserRole.TEACHER]
+  })
+  @ApiQuery({ 
+    name: 'page', 
+    required: false, 
+    type: Number, 
+    description: 'Page number for pagination.',
+    example: 1
+  })
+  @ApiQuery({ 
+    name: 'limit', 
+    required: false, 
+    type: Number, 
+    description: 'Number of items per page.',
+    example: 10
+  })
+  @ApiQuery({ 
+    name: 'search', 
+    required: false, 
+    type: String, 
+    description: 'Search term for filtering users.',
+    example: 'john'
+  })
+  @ApiQuery({ 
+    name: 'full', 
+    required: false, 
+    type: Boolean, 
+    description: 'Whether to return full user details.',
+    example: false
+  })
+  findAll(
+    @Query('role') role: UserRole[],
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('search') search: string,
+    @Query('full') full: boolean = false,
+    @LoginUser('schoolId') schoolId: Types.ObjectId
+  ) {
+    return this.userService.findAll(role, schoolId, full, page, limit, search);
+  }
+
+
+  @Get("/count-by-role")
+  @Roles(UserRole.ADMIN,UserRole.HR)
+  @ApiOperation({ summary: 'Get all users' })
+  @ApiResponse({ status: 200, description: 'Return all users.', type: [User] })
+  @ApiQuery({ 
+    name: 'role', 
+    required: false, 
+    enum: UserRole, 
+    isArray: true, 
+    description: 'Filter users by role.',
+    type: [String],
+    example: ['admin', 'teacher']
+  })
+  findCount(
+    @Query('role') role: UserRole[],
+    @LoginUser('schoolId') schoolId: Types.ObjectId
+  ) {
+    return this.userService.findCount(role, schoolId);
   }
 
   @Get(':id')
@@ -44,8 +111,8 @@ export class UserController {
     return this.userService.findOne(id,schoolId);
   }
 
-  @Put(':id')
-  @Roles('admin')
+  @Patch(':id')
+  @Roles(UserRole.ADMIN,UserRole.HR)
   @ApiOperation({ summary: 'Update a user' })
   @ApiResponse({ status: 200, description: 'The user has been successfully updated.', type: User })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
@@ -57,7 +124,7 @@ export class UserController {
   }
 
   @Delete(':id')
-  @Roles('admin')
+  @Roles('admin',UserRole.HR)
   @ApiOperation({ summary: 'Delete a user' })
   @ApiResponse({ status: 200, description: 'The user has been successfully deleted.' })
   @ApiResponse({ status: 404, description: 'User not found.' })

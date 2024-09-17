@@ -3,13 +3,18 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { TimetableController } from './timetable.controller';
 import { TimetableService } from './timetable.service';
 import { TimeTable, TimeTableSchema } from '../domains/schema/timetable.schema';
-import { RolesGuard } from '../shared/guards/roles.guard';
+import { GuardsModule } from '../guards/guards.module';
+import { User, UserSchema } from 'src/domains/schema/user.schema';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: TimeTable.name, schema: TimeTableSchema }]),
+    MongooseModule.forFeature([
+      { name: TimeTable.name, schema: TimeTableSchema },
+      { name: User.name, schema: UserSchema }
+    ]),
+    GuardsModule,
   ],
   controllers: [TimetableController],
-  providers: [TimetableService, RolesGuard],
+  providers: [TimetableService],
 })
 export class TimetableModule {}

@@ -2,10 +2,11 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { EmployeesController } from './employees.controller';
 import { EmployeesService } from './employees.service';
-import { Employee, EmployeeSchema } from 'src/domains/schema/employee.schema';
-import { Attendance, AttendanceSchema } from 'src/domains/schema/attendance.schema';
-import { Leave, LeaveSchema } from 'src/domains/schema/leave.schema';
-import { Payroll, PayrollSchema } from 'src/domains/schema/payroll.schema';
+import { Employee, EmployeeSchema } from '../domains/schema/employee.schema';
+import { Attendance, AttendanceSchema } from '../domains/schema/attendance.schema';
+import { Leave, LeaveSchema } from '../domains/schema/leave.schema';
+import { Payroll, PayrollSchema } from '../domains/schema/payroll.schema';
+import { GuardsModule } from '../guards/guards.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { Payroll, PayrollSchema } from 'src/domains/schema/payroll.schema';
       { name: Leave.name, schema: LeaveSchema },
       { name: Payroll.name, schema: PayrollSchema },
     ]),
+    GuardsModule,
   ],
   controllers: [EmployeesController],
   providers: [EmployeesService],

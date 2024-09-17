@@ -9,7 +9,7 @@ import { Attendance, AttendanceSchema } from '../domains/schema/attendance.schem
 import { Syllabus, SyllabusSchema } from '../domains/schema/syllabus.schema';
 import { StudyMaterial, StudyMaterialSchema } from '../domains/schema/study-material.schema';
 import { Result, ResultSchema } from '../domains/schema/result.schema';
-import { RolesGuard } from '../shared/guards/roles.guard';
+import { GuardsModule } from '../guards/guards.module';
 import { Student, StudentSchema } from 'src/domains/schema/students.schema';
 import { User, UserSchema } from 'src/domains/schema/user.schema';
 
@@ -26,8 +26,9 @@ import { User, UserSchema } from 'src/domains/schema/user.schema';
       { name: Student.name, schema: StudentSchema },
       { name: User.name, schema: UserSchema },
     ]),
+    GuardsModule,
   ],
   controllers: [ClassroomController],
-  providers: [ClassroomService, RolesGuard],
+  providers: [ClassroomService],
 })
 export class ClassroomModule {}

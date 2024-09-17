@@ -3,19 +3,34 @@ import { Document, Types } from 'mongoose';
 
 export type AttendanceDocument = Attendance & Document;
 
+enum AttendanceStatus {
+  PRESENT = 'present',
+  ABSENT = 'absent',
+  HALF_DAY = 'halfday'
+}
+
 @Schema()
-export class Attendance {
+class StudentAttendance {
   @Prop({ type: Types.ObjectId, ref: 'Student', required: true })
   studentId: Types.ObjectId;
 
+  @Prop({ type: String, enum: AttendanceStatus, required: true })
+  status: AttendanceStatus;
+}
+
+@Schema()
+export class Attendance {
+  @Prop({ required: true })
+  attendanceDate: Date;
+
   @Prop({ type: Types.ObjectId, ref: 'Classroom', required: true })
-  classroomId: Types.ObjectId;
+  classId: Types.ObjectId;
 
-  @Prop({ required: true })
-  date: Date;
+  @Prop({ type: Types.ObjectId, ref: 'Teacher', required: true })
+  teacherId: Types.ObjectId;
 
-  @Prop({ required: true })
-  isPresent: boolean;
+  @Prop({ type: [StudentAttendance], required: true })
+  studentsAttendance: StudentAttendance[];
 }
 
 export const AttendanceSchema = SchemaFactory.createForClass(Attendance);

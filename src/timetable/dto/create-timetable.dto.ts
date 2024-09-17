@@ -16,12 +16,12 @@ class TimeSlot {
   @ApiProperty({ description: 'The start time of the slot' })
   @IsNotEmpty()
   @IsString()
-  startTime: string;
+  startTime: Date;
 
   @ApiProperty({ description: 'The end time of the slot' })
   @IsNotEmpty()
   @IsString()
-  endTime: string;
+  endTime: Date;
 
   @ApiProperty({ description: 'The subject ID for this time slot' })
   @IsNotEmpty()
@@ -48,19 +48,45 @@ class DaySchedule {
 }
 
 export class CreateTimetableDto {
-  @ApiProperty({ description: 'The class or grade for this timetable' })
+  @ApiProperty({ description: 'Classroom id' })
   @IsNotEmpty()
   @IsString()
-  class: string;
+  classId: string;
 
-  @ApiProperty({ description: 'The academic year for this timetable' })
-  @IsNotEmpty()
-  @IsString()
-  academicYear: string;
 
-  @ApiProperty({ description: 'The schedule for each day', type: [DaySchedule] })
+  @ApiProperty({ description: 'Schedule for Monday', type: [TimeSlot] })
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => DaySchedule)
-  schedule: DaySchedule[];
+  @Type(() => TimeSlot)
+  monday: TimeSlot[];
+
+  @ApiProperty({ description: 'Schedule for Tuesday', type: [TimeSlot] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TimeSlot)
+  tuesday: TimeSlot[];
+
+  @ApiProperty({ description: 'Schedule for Wednesday', type: [TimeSlot] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TimeSlot)
+  wednesday: TimeSlot[];
+
+  @ApiProperty({ description: 'Schedule for Thursday', type: [TimeSlot] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TimeSlot)
+  thursday: TimeSlot[];
+
+  @ApiProperty({ description: 'Schedule for Friday', type: [TimeSlot] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TimeSlot)
+  friday: TimeSlot[];
+
+  @ApiProperty({ description: 'Schedule for Saturday', type: [TimeSlot] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TimeSlot)
+  saturday: TimeSlot[];
 }

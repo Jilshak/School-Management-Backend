@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
-import { Model, Connection, Types } from 'mongoose';
+import { Model, Connection, Types, ClientSession } from 'mongoose';
 import { User } from '../domains/schema/user.schema';
 import { Student } from '../domains/schema/students.schema';
 import { Admission } from '../domains/schema/admission.schema';
@@ -18,6 +18,7 @@ import { UserRole } from '../domains/enums/user-roles.enum';
 import * as bcrypt from 'bcrypt';
 import { Staff } from 'src/domains/schema/staff.schema';
 import { Teacher } from 'src/domains/schema/teacher.schema';
+import { Subject } from 'src/domains/schema/subject.schema';
 
 @Injectable()
 export class UserService {
@@ -26,7 +27,7 @@ export class UserService {
     @InjectModel(Student.name) private studentModel: Model<Student>,
     @InjectModel(Staff.name) private staffModel: Model<Staff>,
     @InjectModel(Teacher.name) private teacherModel: Model<Teacher>,
-    @InjectModel(Admission.name) private admissionModel: Model<Admission>,
+    @InjectModel(Subject.name) private subjectModel: Model<Subject>,
     @InjectConnection() private connection: Connection,
   ) {}
 
@@ -39,146 +40,203 @@ export class UserService {
     }
   }
 
+  private generateRandomUsername(): string {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const numbers = '0123456789';
+    let username = '';
+    
+    // Generate 2 random capital letters
+    for (let i = 0; i < 2; i++) {
+      username += letters.charAt(Math.floor(Math.random() * letters.length));
+    }
+    
+    // Generate 4 random numbers
+    for (let i = 0; i < 4; i++) {
+      username += numbers.charAt(Math.floor(Math.random() * numbers.length));
+    }
+    
+    return username;
+  }
+
+  private generatePassword(): string {
+    const length = 10;
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
+    let password = "";
+    for (let i = 0; i < length; i++) {
+      password += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+    return password;
+  }
+  async createUniqueUserCredentials(): Promise<{ username: string, password: string }> {
+    let username: string;
+    let isUnique = false;
+
+    while (!isUnique) {
+      username = this.generateRandomUsername();
+      const existingUser = await this.userModel.findOne({ username }).exec();
+      if (!existingUser) {
+        isUnique = true;
+      }
+    }
+
+    const password = this.generatePassword();
+    return { username, password };
+  }
   async create(
     createUserDto: CreateUserDto,
     schoolId?: Types.ObjectId,
-  ): Promise<User> {
-    let session = null;
+  ): Promise<String> {
+    let session: ClientSession | null = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
-      if (createUserDto.role === 'superadmin' && schoolId) {
-        throw new Error('Only super admin can create super admin');
+
+      // Validate roles
+      if (!Array.isArray(createUserDto.roles) || createUserDto.roles.length === 0) {
+        throw new BadRequestException('At least one role must be specified');
       }
-      if (createUserDto.role !== 'superadmin' && !createUserDto.schoolId) {
-        throw new Error('School Id not found');
+
+      // Handle STUDENT role
+      if (createUserDto.roles.includes(UserRole.STUDENT)) {
+        createUserDto.roles = [UserRole.STUDENT];
       }
-      const password = await bcrypt.hash(createUserDto.password, 2);
+
+      // Validate SUPERADMIN creation
+      if (createUserDto.roles.includes(UserRole.SUPERADMIN)) {
+        if (schoolId) {
+          throw new BadRequestException('Only super admin can create super admin');
+        }
+        if (!createUserDto.schoolId) {
+          throw new BadRequestException('School Id is required for super admin');
+        }
+      }
+      console.log(createUserDto)
+      const { username, password } = await this.createUniqueUserCredentials();
+      console.log({ username, password })
+      const hashedPassword = await bcrypt.hash(password, 10);
+
       const createdUser = new this.userModel({
-        email: createUserDto.email,
-        password: password,
-        role: createUserDto.role,
-        schoolId:
-          createUserDto.role !== 'superadmin'
-            ? new Types.ObjectId(schoolId || createUserDto.schoolId)
-            : undefined,
-        classId:
-          createUserDto.role !== UserRole.STUDENT &&
-          new Types.ObjectId(createUserDto.classId),
+        username,
+        password: hashedPassword,
+        roles: createUserDto.roles,
+        schoolId: createUserDto.roles.includes(UserRole.SUPERADMIN)
+          ? undefined
+          : schoolId,
+        classId: createUserDto.roles.includes(UserRole.STUDENT)
+          ? new Types.ObjectId(createUserDto.classId)
+          : undefined,
       });
+
       const savedUser = await createdUser.save({ session });
 
-      if (createUserDto.role === UserRole.STAFF) {
-        const createdStaff = new this.staffModel({
-          userId: savedUser._id,
-          firstName: createUserDto.firstName,
-          lastName: createUserDto.lastName,
-          dateOfBirth: createUserDto.dateOfBirth,
-          gender: createUserDto.gender,
-          nationality: createUserDto.nationality,
-          contactNumber: createUserDto.contactNumber,
-          email: createUserDto.email,
-          address: createUserDto.address,
-          joinDate: createUserDto.joinDate,
-          department: createUserDto.department,
-          position: createUserDto.position,
-          qualifications: createUserDto.qualifications,
-          previousEmployments: createUserDto.previousEmployments,
-          schoolID: new Types.ObjectId(createUserDto.schoolId),
-          adhaarNumber: createUserDto.adhaarNumber,
-          pancardNumber: createUserDto.pancardNumber,
-          emergencyContactName: createUserDto.emergencyContactName,
-          emergencyContactNumber: createUserDto.emergencyContactNumber,
-          pancardDocument: createUserDto.pancardDocument,
-          adhaarDocument: createUserDto.adhaarDocument,
-        });
-        await createdStaff.save({ session });
-      } else if (createUserDto.role === UserRole.TEACHER) {
-        const teacherData = {
-          userId: savedUser._id,
-          firstName: createUserDto.firstName,
-          lastName: createUserDto.lastName,
-          dateOfBirth: createUserDto.dateOfBirth,
-          gender: createUserDto.gender,
-          nationality: createUserDto.nationality,
-          contactNumber: createUserDto.contactNumber,
-          address: createUserDto.address,
-          joinDate: createUserDto.joinDate,
-          subjects: createUserDto.subjects.map(
-            (x) => new Types.ObjectId(x.toString()),
-          ),
-          qualifications: createUserDto.qualifications,
-          schoolID: new Types.ObjectId(createUserDto.schoolId),
-          adhaarNumber: createUserDto.adhaarNumber,
-          pancardNumber: createUserDto.pancardNumber,
-          emergencyContactName: createUserDto.emergencyContactName,
-          emergencyContactNumber: createUserDto.emergencyContactNumber,
-          pancardDocument: createUserDto.pancardDocument,
-          adhaarDocument: createUserDto.adhaarDocument,
-        };
-        const createdTeacher = new this.teacherModel(teacherData);
-        await createdTeacher.save({ session });
-      } else if (savedUser.role === UserRole.STUDENT) {
-        const createdStudent = new this.studentModel({
-          userId: savedUser._id,
-          firstName: createUserDto.firstName,
-          lastName: createUserDto.lastName,
-          dateOfBirth: createUserDto.dateOfBirth,
-          gender: createUserDto.gender,
-          nationality: createUserDto.nationality,
-          contactNumber: createUserDto.contactNumber,
-          address: createUserDto.address,
-          joinDate: createUserDto.joinDate,
-          enrollmentNumber: createUserDto.enrollmentNumber,
-          classId: new Types.ObjectId(createUserDto.classId),
-          parentsDetails: createUserDto.parentsDetails,
-          adhaarNumber: createUserDto.adhaarNumber,
-          emergencyContactName: createUserDto.emergencyContactName,
-          emergencyContactNumber: createUserDto.emergencyContactNumber,
-          adhaarDocument: createUserDto.adhaarDocument,
-          state: createUserDto.state,
-          birthCertificateDocument: createUserDto.birthCertificateDocument,
-          tcNumber: createUserDto.tcNumber,
-          tcDocument: createUserDto.tcDocument,
-        });
-        await createdStudent.save({ session });
-        const admissionPayments = new this.admissionModel({
-          paymentDetails: createUserDto.paymentDetails,
-          userId: savedUser._id,
-        });
-        await admissionPayments.save({ session });
+      // Create role-specific documents
+      if (!savedUser.roles.includes(UserRole.STUDENT)) {
+        await this.createStaffDocument(savedUser, createUserDto, session);
+      }
+      if (savedUser.roles.includes(UserRole.TEACHER)) {
+        await this.createTeacherDocument(savedUser, createUserDto, session);
+      }
+      if (savedUser.roles.includes(UserRole.STUDENT)) {
+        await this.createStudentDocument(savedUser, createUserDto, session);
       }
 
       if (session) {
         await session.commitTransaction();
       }
-      return savedUser;
+      return "User Created";
     } catch (error) {
+      console.log(error)
       if (session) {
         await session.abortTransaction();
       }
       if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
         throw new BadRequestException('Email already exists');
       }
-      console.log(error);
+      console.error('Failed to create user:', error);
       throw new InternalServerErrorException('Failed to create user');
     } finally {
       if (session) {
-        session.endSession();
+        await session.endSession();
       }
     }
   }
 
+  // Helper methods for creating role-specific documents
+  private async createStaffDocument(user: User, dto: CreateUserDto, session: ClientSession | null) {
+    const staffData = {
+      userId: user._id,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      dateOfBirth: dto.dateOfBirth,
+      gender: dto.gender,
+      nationality: dto.nationality,
+      contactNumber: dto.contactNumber,
+      email: dto.email,
+      address: dto.address,
+      joinDate: dto.joinDate,
+      department: dto.department,
+      position: dto.position,
+      qualifications: dto.qualifications,
+      previousEmployments: dto.previousEmployments,
+      schoolID: new Types.ObjectId(dto.schoolId),
+      adhaarNumber: dto.adhaarNumber,
+      pancardNumber: dto.pancardNumber,
+      emergencyContactName: dto.emergencyContactName,
+      emergencyContactNumber: dto.emergencyContactNumber,
+      pancardDocument: dto.pancardDocument,
+      adhaarDocument: dto.adhaarDocument,
+    };
+    const createdStaff = new this.staffModel(staffData);
+    await createdStaff.save({ session });
+  }
+
+  private async createTeacherDocument(user: User, dto: CreateUserDto, session: ClientSession | null) {
+    const teacherData = {
+      userId: user._id,
+      subjects: dto.subjects?.map(x => new Types.ObjectId(x.toString())),
+    };
+    const createdTeacher = new this.teacherModel(teacherData);
+    await createdTeacher.save({ session });
+  }
+
+  private async createStudentDocument(user: User, dto: CreateUserDto, session: ClientSession | null) {
+    const studentData = {
+      userId: user._id,
+      email:dto.email,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      dateOfBirth: dto.dateOfBirth,
+      gender: dto.gender,
+      nationality: dto.nationality,
+      contactNumber: dto.contactNumber,
+      address: dto.address,
+      joinDate: dto.joinDate,
+      enrollmentNumber: dto.enrollmentNumber,
+      classId: new Types.ObjectId(dto.classId),
+      parentsDetails: dto.parentsDetails,
+      adhaarNumber: dto.adhaarNumber,
+      emergencyContactName: dto.emergencyContactName,
+      emergencyContactNumber: dto.emergencyContactNumber,
+      adhaarDocument: dto.adhaarDocument,
+      state: dto.state,
+      birthCertificateDocument: dto.birthCertificateDocument,
+      tcNumber: dto.tcNumber,
+      tcDocument: dto.tcDocument,
+    };
+    const createdStudent = new this.studentModel(studentData);
+    await createdStudent.save({ session });
+  }
+
   async findAll(
-    role: string[],
+    roles: UserRole[],
     schoolId: Types.ObjectId,
     full: boolean = false,
     page: number = 1,
     limit: number = 10,
+    search?: string,
   ) {
     let session = null;
     try {
@@ -188,11 +246,18 @@ export class UserService {
         session = await this.connection.startSession();
         session.startTransaction();
       }
+      
+      roles = Array.isArray(roles) ? roles : [roles];
+      const query: any = { roles: { $in: roles }, schoolId, isActive: true };
 
-      const query = { role: { $in: role }, schoolId };
-      const totalCount = await this.userModel
-        .countDocuments(query)
-        .session(session);
+      // Add search functionality
+      if (search) {
+        query.$or = [
+          { 'firstName': { $regex: search, $options: 'i' } },
+          { 'lastName': { $regex: search, $options: 'i' } },
+          { 'contactNumber': { $regex: search, $options: 'i' } },
+        ];
+      }
 
       let aggregatePipeline: any = [
         { $match: query },
@@ -224,19 +289,13 @@ export class UserService {
           $addFields: {
             additionalDetails: {
               $cond: [
-                { $eq: ['$role', UserRole.STAFF] },
-                { $arrayElemAt: ['$staffDetails', 0] },
+                { $in: [UserRole.STUDENT, '$roles'] },
+                { $arrayElemAt: ['$studentDetails', 0] },
                 {
                   $cond: [
-                    { $eq: ['$role', UserRole.TEACHER] },
+                    { $in: [UserRole.TEACHER, '$roles'] },
                     { $arrayElemAt: ['$teacherDetails', 0] },
-                    {
-                      $cond: [
-                        { $eq: ['$role', UserRole.STUDENT] },
-                        { $arrayElemAt: ['$studentDetails', 0] },
-                        {},
-                      ],
-                    },
+                    { $arrayElemAt: ['$staffDetails', 0] },
                   ],
                 },
               ],
@@ -244,20 +303,39 @@ export class UserService {
           },
         },
         {
-          $replaceRoot: {
-            newRoot: {
-              $mergeObjects: ['$$ROOT', '$additionalDetails'],
-            },
+          $addFields: {
+            firstName: '$additionalDetails.firstName',
+            lastName: '$additionalDetails.lastName',
+            contactNumber: '$additionalDetails.contactNumber',
+            email: '$additionalDetails.email',
+            // Add other fields you want to include
           },
         },
         {
           $project: {
-            staffDetails: 0,
-            teacherDetails: 0,
-            studentDetails: 0,
+            password: 0,
+            __v: 0,
+            isActive: 0,
           },
         },
       ];
+
+      // Add search on additional fields
+      if (search) {
+        aggregatePipeline.push({
+          $match: {
+            $or: [
+              { firstName: { $regex: search, $options: 'i' } },
+              { lastName: { $regex: search, $options: 'i' } },
+              { contactNumber: { $regex: search, $options: 'i' } },
+            ],
+          },
+        });
+      }
+
+      const totalCount = await this.userModel
+        .aggregate([...aggregatePipeline, { $count: 'total' }])
+        .session(session);
 
       if (!full) {
         const skip = (page - 1) * limit;
@@ -271,7 +349,7 @@ export class UserService {
       if (session) {
         await session.commitTransaction();
       }
-      return { enhancedUsers, totalCount };
+      return { users: enhancedUsers, totalCount: totalCount[0]?.total || 0 };
     } catch (error) {
       if (session) {
         await session.abortTransaction();
@@ -281,6 +359,54 @@ export class UserService {
       if (session) {
         session.endSession();
       }
+    }
+  }
+
+  async findCount(
+    roles: UserRole[],
+    schoolId: Types.ObjectId,
+  ): Promise<{ [key: string]: number }> {
+    try {
+      roles =
+        typeof roles === 'undefined'
+          ? [UserRole.ADMIN, UserRole.TEACHER, UserRole.ACCOUNTANT,UserRole.ADMISSION_TEAM,UserRole.HR]
+          : Array.isArray(roles)
+            ? roles
+            : [roles];
+      const countQuery = this.userModel.aggregate([
+        {
+          $match: {
+            schoolId: schoolId,
+            roles: { $in: roles },
+            isActive: true,
+          },
+        },
+        {
+          $unwind: '$roles'
+        },
+        {
+          $group: {
+            _id: '$roles',
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+
+      const results = await countQuery.exec();
+
+      const countByRole = {};
+      roles.forEach((role) => {
+        countByRole[role] = 0;
+      });
+
+      results.forEach((result) => {
+        countByRole[result._id] = result.count;
+      });
+
+      return countByRole;
+    } catch (err) {
+      console.log(err);
+      throw new InternalServerErrorException('Failed to fetch user counts');
     }
   }
 
@@ -295,27 +421,48 @@ export class UserService {
       }
 
       let user: any = await this.userModel
-        .findOne({ _id: new Types.ObjectId(id), schoolId })
+        .findOne({ _id: new Types.ObjectId(id), schoolId, isActive: true })
         .session(session)
-        .exec();
-      if (user.role === UserRole.STAFF) {
-        const staffDetails = await this.staffModel.findOne({
-          userId: user._id,
-        });
-        user = { ...user, ...staffDetails };
-      } else if (user.role === UserRole.TEACHER) {
-        const teacherDetails = await this.teacherModel.findOne({
-          userId: user._id,
-        });
-        user = { ...user, ...teacherDetails };
-      } else {
-        const studentDetails = await this.studentModel.findOne({
-          userId: user._id,
-        });
-        user = { ...user, ...studentDetails };
-      }
+        .lean();
+
       if (!user) {
         throw new NotFoundException(`User with ID ${id} not found`);
+      }
+
+      // Fetch additional details based on user roles
+      if (user.roles.includes(UserRole.STUDENT)) {
+        const studentDetails = await this.studentModel.findOne({
+          userId: user._id,
+        }).session(session).lean();
+        user = { ...user, ...studentDetails };
+      } else {
+        // For non-student roles (STAFF, TEACHER, etc.)
+        const staffDetails = await this.staffModel.findOne({
+          userId: user._id,
+        }).session(session).lean();
+        user = { ...user, ...staffDetails };
+
+        if (user.roles.includes(UserRole.TEACHER)) {
+          const teacherDetails = await this.teacherModel.findOne({
+            userId: user._id,
+          }).session(session).lean();
+          
+          if (teacherDetails) {
+            // Fetch subject details
+            const subjectIds = teacherDetails.subjects || [];
+            const subjects = await this.subjectModel.find({
+              _id: { $in: subjectIds }
+            }).session(session).lean();
+            
+            user = { 
+              ...user, 
+              ...teacherDetails, 
+              subjects: subjects 
+            };
+          } else {
+            user.subjects = [];
+          }
+        }
       }
 
       if (session) {
@@ -345,120 +492,48 @@ export class UserService {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const updatedUser = await this.userModel
-        .findOneAndUpdate(
-          { _id: new Types.ObjectId(id), schoolId },
-          {
-            $set: {
-              email: updateUserDto.email,
-              role: updateUserDto.role,
-              schoolId:
-                updateUserDto.role !== 'superadmin'
-                  ? new Types.ObjectId(schoolId || updateUserDto.schoolId)
-                  : undefined,
-              classId:
-                updateUserDto.role !== UserRole.STUDENT &&
-                new Types.ObjectId(updateUserDto.classId),
-            },
+      // Validate roles
+      if (!Array.isArray(updateUserDto.roles) || updateUserDto.roles.length === 0) {
+        throw new BadRequestException('At least one role must be specified');
+      }
+
+      // Handle STUDENT role
+      if (updateUserDto.roles.includes(UserRole.STUDENT)) {
+        updateUserDto.roles = [UserRole.STUDENT];
+      }
+
+      const updatedUser = await this.userModel.findOneAndUpdate(
+        { _id: new Types.ObjectId(id), schoolId },
+        {
+          $set: {
+            email: updateUserDto.email,
+            roles: updateUserDto.roles,
+            classId: updateUserDto.roles.includes(UserRole.STUDENT)
+              ? new Types.ObjectId(updateUserDto.classId)
+              : undefined,
           },
-          { new: true, session },
-        )
-        .exec();
+        },
+        { new: true, session },
+      ).exec();
+
       if (!updatedUser) {
         throw new NotFoundException(`User with ID ${id} not found`);
       }
-      if (updatedUser.role === UserRole.STAFF) {
-        await this.staffModel
-          .findOneAndUpdate(
-            { userId: updatedUser._id },
-            { $set: {
-              firstName: updateUserDto.firstName,
-              lastName: updateUserDto.lastName,
-              dateOfBirth: updateUserDto.dateOfBirth,
-              gender: updateUserDto.gender,
-              nationality: updateUserDto.nationality,
-              contactNumber: updateUserDto.contactNumber,
-              email: updateUserDto.email,
-              address: updateUserDto.address,
-              joinDate: updateUserDto.joinDate,
-              department: updateUserDto.department,
-              position: updateUserDto.position,
-              qualifications: updateUserDto.qualifications,
-              previousEmployments: updateUserDto.previousEmployments,
-              schoolID: new Types.ObjectId(updateUserDto.schoolId),
-              adhaarNumber: updateUserDto.adhaarNumber,
-              pancardNumber: updateUserDto.pancardNumber,
-              emergencyContactName: updateUserDto.emergencyContactName,
-              emergencyContactNumber: updateUserDto.emergencyContactNumber,
-              pancardDocument: updateUserDto.pancardDocument,
-              adhaarDocument: updateUserDto.adhaarDocument,
-            } },
-          )
-          .session(session)
-          .exec();
-      } else if (updatedUser.role === UserRole.TEACHER) {
-        const teacherData = {
-          firstName: updateUserDto.firstName,
-          lastName: updateUserDto.lastName,
-          dateOfBirth: updateUserDto.dateOfBirth,
-          gender: updateUserDto.gender,
-          nationality: updateUserDto.nationality,
-          contactNumber: updateUserDto.contactNumber,
-          address: updateUserDto.address,
-          joinDate: updateUserDto.joinDate,
-          subjects: updateUserDto.subjects.map(
-            (x) => new Types.ObjectId(x.toString()),
-          ),
-          qualifications: updateUserDto.qualifications,
-          schoolID: new Types.ObjectId(updateUserDto.schoolId),
-          adhaarNumber: updateUserDto.adhaarNumber,
-          pancardNumber: updateUserDto.pancardNumber,
-          emergencyContactName: updateUserDto.emergencyContactName,
-          emergencyContactNumber: updateUserDto.emergencyContactNumber,
-          pancardDocument: updateUserDto.pancardDocument,
-          adhaarDocument: updateUserDto.adhaarDocument,
-        }
-        await this.teacherModel
-          .findOneAndUpdate(
-            { userId: updatedUser._id },
-            { $set: updateUserDto },
-          )
-          .session(session)
-          .exec();
-      } else if (updateUserDto.role === UserRole.STUDENT) {
-        await this.studentModel
-          .findOneAndUpdate(
-            { userId: updatedUser._id },
-            { $set: {
-              firstName: updateUserDto.firstName,
-              lastName: updateUserDto.lastName,
-              dateOfBirth: updateUserDto.dateOfBirth,
-              gender: updateUserDto.gender,
-              nationality: updateUserDto.nationality,
-              contactNumber: updateUserDto.contactNumber,
-              address: updateUserDto.address,
-              joinDate: updateUserDto.joinDate,
-              enrollmentNumber: updateUserDto.enrollmentNumber,
-              classId: new Types.ObjectId(updateUserDto.classId),
-              parentsDetails: updateUserDto.parentsDetails,
-              adhaarNumber: updateUserDto.adhaarNumber,
-              emergencyContactName: updateUserDto.emergencyContactName,
-              emergencyContactNumber: updateUserDto.emergencyContactNumber,
-              adhaarDocument: updateUserDto.adhaarDocument,
-              state: updateUserDto.state,
-              birthCertificateDocument: updateUserDto.birthCertificateDocument,
-              tcNumber: updateUserDto.tcNumber,
-              tcDocument: updateUserDto.tcDocument,
-            } },
-          )
-          .session(session)
-          .exec();
+
+      // Update role-specific documents
+      if (!updatedUser.roles.includes(UserRole.STUDENT)) {
+        await this.updateStaffDocument(updatedUser, updateUserDto, session);
+      }
+      if (updatedUser.roles.includes(UserRole.TEACHER)) {
+        await this.updateTeacherDocument(updatedUser, updateUserDto, session);
+      }
+      if (updatedUser.roles.includes(UserRole.STUDENT)) {
+        await this.updateStudentDocument(updatedUser, updateUserDto, session);
       }
 
       if (session) {
@@ -472,12 +547,88 @@ export class UserService {
       if (error instanceof NotFoundException) {
         throw error;
       }
+      console.error('Failed to update user:', error);
       throw new InternalServerErrorException('Failed to update user');
     } finally {
       if (session) {
         session.endSession();
       }
     }
+  }
+
+  // Helper methods for updating role-specific documents
+  private async updateStaffDocument(user: User, dto: UpdateUserDto, session: ClientSession | null) {
+    const staffData = {
+      userId: user._id,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      dateOfBirth: dto.dateOfBirth,
+      gender: dto.gender,
+      nationality: dto.nationality,
+      contactNumber: dto.contactNumber,
+      email: dto.email,
+      address: dto.address,
+      joinDate: dto.joinDate,
+      department: dto.department,
+      position: dto.position,
+      qualifications: dto.qualifications,
+      previousEmployments: dto.previousEmployments,
+      schoolID: new Types.ObjectId(dto.schoolId),
+      adhaarNumber: dto.adhaarNumber,
+      pancardNumber: dto.pancardNumber,
+      emergencyContactName: dto.emergencyContactName,
+      emergencyContactNumber: dto.emergencyContactNumber,
+      pancardDocument: dto.pancardDocument,
+      adhaarDocument: dto.adhaarDocument,
+    };
+    await this.staffModel.findOneAndUpdate(
+      { userId: user._id },
+      { $set: staffData },
+      { upsert: true, new: true, session }
+    );
+  }
+
+  private async updateTeacherDocument(user: User, dto: UpdateUserDto, session: ClientSession | null) {
+    const teacherData = {
+      userId: user._id,
+      subjects: dto.subjects?.map(x => new Types.ObjectId(x.toString())),
+    };
+    await this.teacherModel.findOneAndUpdate(
+      { userId: user._id },
+      { $set: teacherData },
+      { upsert: true, new: true, session }
+    );
+  }
+
+  private async updateStudentDocument(user: User, dto: UpdateUserDto, session: ClientSession | null) {
+    const studentData = {
+      userId: user._id,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      dateOfBirth: dto.dateOfBirth,
+      gender: dto.gender,
+      nationality: dto.nationality,
+      contactNumber: dto.contactNumber,
+      address: dto.address,
+      joinDate: dto.joinDate,
+      enrollmentNumber: dto.enrollmentNumber,
+      classId: new Types.ObjectId(dto.classId),
+      parentsDetails: dto.parentsDetails,
+      adhaarNumber: dto.adhaarNumber,
+      emergencyContactName: dto.emergencyContactName,
+      emergencyContactNumber: dto.emergencyContactNumber,
+      adhaarDocument: dto.adhaarDocument,
+      state: dto.state,
+      birthCertificateDocument: dto.birthCertificateDocument,
+      tcNumber: dto.tcNumber,
+      tcDocument: dto.tcDocument,
+    };
+    await this.studentModel.findOneAndUpdate(
+      { userId: user._id },
+      { $set: studentData },
+      { upsert: true, new: true, session }
+    );
+
   }
 
   async remove(id: string, schoolId): Promise<void> {
@@ -859,178 +1010,5 @@ export class UserService {
     }
   }
 
-  // Admission
-  async createAdmission(
-    createAdmissionDto: CreateAdmissionDto,
-  ): Promise<Admission> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
-
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
-
-      const createdAdmission = new this.admissionModel(createAdmissionDto);
-      const result = await createdAdmission.save({ session });
-
-      if (session) {
-        await session.commitTransaction();
-      }
-      return result;
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      throw new InternalServerErrorException('Failed to create admission');
-    } finally {
-      if (session) {
-        session.endSession();
-      }
-    }
-  }
-
-  async findAllAdmissions(): Promise<Admission[]> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
-
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
-
-      const admissions = await this.admissionModel
-        .find()
-        .session(session)
-        .exec();
-
-      if (session) {
-        await session.commitTransaction();
-      }
-      return admissions;
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      throw new InternalServerErrorException('Failed to fetch admissions');
-    } finally {
-      if (session) {
-        session.endSession();
-      }
-    }
-  }
-
-  async findOneAdmission(id: string): Promise<Admission> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
-
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
-
-      const admission = await this.admissionModel
-        .findById(id)
-        .session(session)
-        .exec();
-      if (!admission) {
-        throw new NotFoundException(`Admission with ID ${id} not found`);
-      }
-
-      if (session) {
-        await session.commitTransaction();
-      }
-      return admission;
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new InternalServerErrorException('Failed to fetch admission');
-    } finally {
-      if (session) {
-        session.endSession();
-      }
-    }
-  }
-
-  async updateAdmission(
-    id: string,
-    updateAdmissionDto: CreateAdmissionDto,
-  ): Promise<Admission> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
-
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
-
-      const updatedAdmission = await this.admissionModel
-        .findByIdAndUpdate(id, updateAdmissionDto, { new: true, session })
-        .exec();
-      if (!updatedAdmission) {
-        throw new NotFoundException(`Admission with ID ${id} not found`);
-      }
-
-      if (session) {
-        await session.commitTransaction();
-      }
-      return updatedAdmission;
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new InternalServerErrorException('Failed to update admission');
-    } finally {
-      if (session) {
-        session.endSession();
-      }
-    }
-  }
-
-  async removeAdmission(id: string): Promise<void> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
-
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
-
-      const result = await this.admissionModel
-        .findByIdAndDelete(id)
-        .session(session)
-        .exec();
-      if (!result) {
-        throw new NotFoundException(`Admission with ID ${id} not found`);
-      }
-
-      if (session) {
-        await session.commitTransaction();
-      }
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new InternalServerErrorException('Failed to remove admission');
-    } finally {
-      if (session) {
-        session.endSession();
-      }
-    }
-  }
+ 
 }

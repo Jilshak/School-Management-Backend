@@ -144,9 +144,9 @@ export class CreateUserDto {
   @IsString()
   password: string;
 
-  @ApiProperty({ enum: UserRole, example: UserRole.STAFF })
+  @ApiProperty({ enum: UserRole, example: [UserRole.ADMISSION_TEAM,UserRole.ACCOUNTANT,UserRole.TEACHER],type:[String] })
   @IsEnum(UserRole)
-  role: UserRole;
+  roles: UserRole[];
 
   @ApiProperty({ example: 'John' })
   @IsString()
@@ -293,14 +293,6 @@ export class CreateUserDto {
   @Type(() => ParentsDetailsDto)
   @IsOptional()
   parentsDetails?: ParentsDetailsDto;
-
-
-  @ApiProperty({ type: [PaymentDetails], required: false })
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => PaymentDetails)
-  @IsOptional()
-  paymentDetails?: PaymentDetails[];
 }
 
 

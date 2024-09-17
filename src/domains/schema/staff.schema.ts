@@ -5,6 +5,9 @@ export type StaffDocument = Staff & Document;
 
 @Schema()
 export class Staff {
+  @Prop({ required: true,unique:true })
+  email: string;
+
   @Prop({ required: true })
   firstName: string;
 
@@ -107,7 +110,7 @@ export class Staff {
   @Prop()
   emergencyContactNumber: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: Types.ObjectId, ref: 'User',unique:true })
   userId: Types.ObjectId;
 }
 

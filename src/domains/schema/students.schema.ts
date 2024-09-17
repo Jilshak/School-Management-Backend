@@ -16,8 +16,11 @@ class ParentsDetails {
 
 @Schema()
 export class Student extends Document {
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true,unique:true })
   userId: MongooseSchema.Types.ObjectId;
+
+  @Prop({ required: true })
+  email: string;
 
   @Prop({ required: true })
   firstName: string;
