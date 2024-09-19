@@ -5,5 +5,6 @@ export enum UserRole {
   HR = 'hr',
   TEACHER = 'teacher',
   ADMIN = 'admin',
-  SUPERADMIN = 'superadmin'
+  SUPERADMIN = 'superadmin',
+    LIBRARIAN = 'librarian'
 }

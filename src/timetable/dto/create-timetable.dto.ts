@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsArray, ValidateNested, IsEnum } from 'class-validator';
+import { IsNotEmpty, IsString, IsArray, ValidateNested, IsEnum, IsOptional, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 
 enum DayOfWeek {
@@ -15,13 +15,13 @@ enum DayOfWeek {
 class TimeSlot {
   @ApiProperty({ description: 'The start time of the slot' })
   @IsNotEmpty()
-  @IsString()
-  startTime: Date;
+  @IsNumber()
+  startTime: number;
 
   @ApiProperty({ description: 'The end time of the slot' })
   @IsNotEmpty()
-  @IsString()
-  endTime: Date;
+  @IsNumber()
+  endTime: number;
 
   @ApiProperty({ description: 'The subject ID for this time slot' })
   @IsNotEmpty()
@@ -34,59 +34,58 @@ class TimeSlot {
   teacherId: string;
 }
 
-class DaySchedule {
-  @ApiProperty({ description: 'The day of the week', enum: DayOfWeek })
-  @IsNotEmpty()
-  @IsEnum(DayOfWeek)
-  day: DayOfWeek;
-
-  @ApiProperty({ description: 'The time slots for this day', type: [TimeSlot] })
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => TimeSlot)
-  slots: TimeSlot[];
-}
-
 export class CreateTimetableDto {
   @ApiProperty({ description: 'Classroom id' })
   @IsNotEmpty()
   @IsString()
   classId: string;
 
-
-  @ApiProperty({ description: 'Schedule for Monday', type: [TimeSlot] })
+  @ApiProperty({ description: 'Schedule for Monday', type: [TimeSlot], required: false })
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => TimeSlot)
-  monday: TimeSlot[];
+  monday?: TimeSlot[];
 
-  @ApiProperty({ description: 'Schedule for Tuesday', type: [TimeSlot] })
+  @ApiProperty({ description: 'Schedule for Tuesday', type: [TimeSlot], required: false })
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => TimeSlot)
-  tuesday: TimeSlot[];
+  tuesday?: TimeSlot[];
 
-  @ApiProperty({ description: 'Schedule for Wednesday', type: [TimeSlot] })
+  @ApiProperty({ description: 'Schedule for Wednesday', type: [TimeSlot], required: false })
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => TimeSlot)
-  wednesday: TimeSlot[];
+  wednesday?: TimeSlot[];
 
-  @ApiProperty({ description: 'Schedule for Thursday', type: [TimeSlot] })
+  @ApiProperty({ description: 'Schedule for Thursday', type: [TimeSlot], required: false })
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => TimeSlot)
-  thursday: TimeSlot[];
+  thursday?: TimeSlot[];
 
-  @ApiProperty({ description: 'Schedule for Friday', type: [TimeSlot] })
+  @ApiProperty({ description: 'Schedule for Friday', type: [TimeSlot], required: false })
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => TimeSlot)
-  friday: TimeSlot[];
+  friday?: TimeSlot[];
 
-  @ApiProperty({ description: 'Schedule for Saturday', type: [TimeSlot] })
+  @ApiProperty({ description: 'Schedule for Saturday', type: [TimeSlot], required: false })
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => TimeSlot)
-  saturday: TimeSlot[];
+  saturday?: TimeSlot[];
+
+  @ApiProperty({ description: 'Schedule for Sunday', type: [TimeSlot], required: false })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TimeSlot)
+  sunday?: TimeSlot[];
 }

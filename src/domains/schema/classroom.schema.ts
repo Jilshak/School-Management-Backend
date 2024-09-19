@@ -8,14 +8,23 @@ export class Classroom {
   @Prop({ required: true })
   name: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: Types.ObjectId, ref: 'User', required: false })
   classTeacherId: Types.ObjectId;
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Subject' }] })
   subjects: Types.ObjectId[];
   
-  @Prop({ required: true })
-  academicYear: string;
+  @Prop({
+    type: {
+      startDate: Date,
+      endDate: Date
+    },
+    required: true
+  })
+  academicYear: {
+    startDate: Date;
+    endDate: Date;
+  };
 
   @Prop({required:true,type:Types.ObjectId,ref:'School'})
   schoolId:Types.ObjectId;

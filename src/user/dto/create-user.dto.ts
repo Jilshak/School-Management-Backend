@@ -240,7 +240,7 @@ export class CreateUserDto {
   @IsArray()
   @Type(() => String)
   @IsOptional()
-  subjects?: String[];
+  subjects?: string[];
 
   @ApiProperty({ type: [CertificateDto] })
   @IsArray()

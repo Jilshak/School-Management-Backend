@@ -19,6 +19,9 @@ import * as bcrypt from 'bcrypt';
 import { Staff } from 'src/domains/schema/staff.schema';
 import { Teacher } from 'src/domains/schema/teacher.schema';
 import { Subject } from 'src/domains/schema/subject.schema';
+import { Classroom } from 'src/domains/schema/classroom.schema';
+import { CustomError } from '../common/errors/custom-error';
+import { HttpStatus } from '@nestjs/common';
 
 @Injectable()
 export class UserService {
@@ -28,6 +31,7 @@ export class UserService {
     @InjectModel(Staff.name) private staffModel: Model<Staff>,
     @InjectModel(Teacher.name) private teacherModel: Model<Teacher>,
     @InjectModel(Subject.name) private subjectModel: Model<Subject>,
+    @InjectModel(Classroom.name) private classModel: Model<Classroom>,
     @InjectConnection() private connection: Connection,
   ) {}
 
@@ -96,7 +100,7 @@ export class UserService {
 
       // Validate roles
       if (!Array.isArray(createUserDto.roles) || createUserDto.roles.length === 0) {
-        throw new BadRequestException('At least one role must be specified');
+        throw new CustomError(HttpStatus.BAD_REQUEST, 'At least one role must be specified');
       }
 
       // Handle STUDENT role
@@ -107,10 +111,10 @@ export class UserService {
       // Validate SUPERADMIN creation
       if (createUserDto.roles.includes(UserRole.SUPERADMIN)) {
         if (schoolId) {
-          throw new BadRequestException('Only super admin can create super admin');
+          throw new CustomError(HttpStatus.BAD_REQUEST, 'Only super admin can create super admin');
         }
         if (!createUserDto.schoolId) {
-          throw new BadRequestException('School Id is required for super admin');
+          throw new CustomError(HttpStatus.BAD_REQUEST, 'School Id is required for super admin');
         }
       }
       console.log(createUserDto)
@@ -125,7 +129,7 @@ export class UserService {
         schoolId: createUserDto.roles.includes(UserRole.SUPERADMIN)
           ? undefined
           : schoolId,
-        classId: createUserDto.roles.includes(UserRole.STUDENT)
+        classId: createUserDto.roles.includes(UserRole.STUDENT) && createUserDto.classId
           ? new Types.ObjectId(createUserDto.classId)
           : undefined,
       });
@@ -148,15 +152,17 @@ export class UserService {
       }
       return "User Created";
     } catch (error) {
-      console.log(error)
       if (session) {
         await session.abortTransaction();
       }
+      if (error instanceof CustomError) {
+        throw error;
+      }
       if (error.code === 11000 && error.keyPattern && error.keyPattern.email) {
-        throw new BadRequestException('Email already exists');
+        throw new CustomError(HttpStatus.BAD_REQUEST, 'Email already exists');
       }
       console.error('Failed to create user:', error);
-      throw new InternalServerErrorException('Failed to create user');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to create user');
     } finally {
       if (session) {
         await session.endSession();
@@ -194,17 +200,23 @@ export class UserService {
   }
 
   private async createTeacherDocument(user: User, dto: CreateUserDto, session: ClientSession | null) {
-    const teacherData = {
-      userId: user._id,
-      subjects: dto.subjects?.map(x => new Types.ObjectId(x.toString())),
-    };
-    const createdTeacher = new this.teacherModel(teacherData);
-    await createdTeacher.save({ session });
+    try {
+      const teacherData = {
+        userId: user._id,
+        subjects: dto.subjects ? dto.subjects.map(x => new Types.ObjectId(x)) : [],
+      };
+      const createdTeacher = new this.teacherModel(teacherData);
+      await createdTeacher.save({ session });
+    } catch (err) {
+      throw err;
+    }
   }
 
   private async createStudentDocument(user: User, dto: CreateUserDto, session: ClientSession | null) {
-    const studentData = {
-      userId: user._id,
+    try{
+
+      const studentData = {
+        userId: user._id,
       email:dto.email,
       firstName: dto.firstName,
       lastName: dto.lastName,
@@ -224,10 +236,13 @@ export class UserService {
       state: dto.state,
       birthCertificateDocument: dto.birthCertificateDocument,
       tcNumber: dto.tcNumber,
-      tcDocument: dto.tcDocument,
+      tcDocument: dto.tcDocument
     };
     const createdStudent = new this.studentModel(studentData);
     await createdStudent.save({ session });
+  }catch(err){
+    throw err
+  }
   }
 
   async findAll(
@@ -287,23 +302,6 @@ export class UserService {
         },
         {
           $addFields: {
-            additionalDetails: {
-              $cond: [
-                { $in: [UserRole.STUDENT, '$roles'] },
-                { $arrayElemAt: ['$studentDetails', 0] },
-                {
-                  $cond: [
-                    { $in: [UserRole.TEACHER, '$roles'] },
-                    { $arrayElemAt: ['$teacherDetails', 0] },
-                    { $arrayElemAt: ['$staffDetails', 0] },
-                  ],
-                },
-              ],
-            },
-          },
-        },
-        {
-          $addFields: {
             firstName: '$additionalDetails.firstName',
             lastName: '$additionalDetails.lastName',
             contactNumber: '$additionalDetails.contactNumber',
@@ -354,7 +352,7 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      throw new InternalServerErrorException('Failed to fetch users');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch users');
     } finally {
       if (session) {
         session.endSession();
@@ -406,7 +404,7 @@ export class UserService {
       return countByRole;
     } catch (err) {
       console.log(err);
-      throw new InternalServerErrorException('Failed to fetch user counts');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch user counts');
     }
   }
 
@@ -426,7 +424,7 @@ export class UserService {
         .lean();
 
       if (!user) {
-        throw new NotFoundException(`User with ID ${id} not found`);
+        throw new CustomError(HttpStatus.NOT_FOUND, `User with ID ${id} not found`);
       }
 
       // Fetch additional details based on user roles
@@ -473,10 +471,10 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      if (error instanceof NotFoundException) {
+      if (error instanceof CustomError) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to fetch user');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch user');
     } finally {
       if (session) {
         session.endSession();
@@ -499,7 +497,7 @@ export class UserService {
 
       // Validate roles
       if (!Array.isArray(updateUserDto.roles) || updateUserDto.roles.length === 0) {
-        throw new BadRequestException('At least one role must be specified');
+        throw new CustomError(HttpStatus.BAD_REQUEST, 'At least one role must be specified');
       }
 
       // Handle STUDENT role
@@ -522,7 +520,7 @@ export class UserService {
       ).exec();
 
       if (!updatedUser) {
-        throw new NotFoundException(`User with ID ${id} not found`);
+        throw new CustomError(HttpStatus.NOT_FOUND, `User with ID ${id} not found`);
       }
 
       // Update role-specific documents
@@ -544,11 +542,11 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      if (error instanceof NotFoundException) {
+      if (error instanceof CustomError) {
         throw error;
       }
       console.error('Failed to update user:', error);
-      throw new InternalServerErrorException('Failed to update user');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to update user');
     } finally {
       if (session) {
         session.endSession();
@@ -640,6 +638,11 @@ export class UserService {
         session = await this.connection.startSession();
         session.startTransaction();
       }
+      const isClassTeacher = await this.classModel.findOne({classTeacherId:new Types.ObjectId(id),isActive:true})
+
+      if (isClassTeacher) {
+        throw new CustomError(HttpStatus.BAD_REQUEST, `Cannot remove user. This teacher is the class teacher of ${isClassTeacher.name}. Please change the class teacher or make the class inactive before removing this user.`);
+      }
 
       const result = await this.userModel
         .findOneAndUpdate(
@@ -649,7 +652,7 @@ export class UserService {
         .session(session)
         .exec();
       if (!result) {
-        throw new NotFoundException(`User with ID ${id} not found`);
+        throw new CustomError(HttpStatus.NOT_FOUND, `User with ID ${id} not found`);
       }
 
       if (session) {
@@ -659,10 +662,10 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      if (error instanceof NotFoundException) {
+      if (error instanceof CustomError) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to remove user');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to remove user');
     } finally {
       if (session) {
         session.endSession();
@@ -692,7 +695,7 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      throw new InternalServerErrorException('Failed to create student');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to create student');
     } finally {
       if (session) {
         session.endSession();
@@ -720,7 +723,7 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      throw new InternalServerErrorException('Failed to fetch students');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch students');
     } finally {
       if (session) {
         session.endSession();
@@ -743,7 +746,7 @@ export class UserService {
         .session(session)
         .exec();
       if (!student) {
-        throw new NotFoundException(`Student with ID ${id} not found`);
+        throw new CustomError(HttpStatus.NOT_FOUND, `Student with ID ${id} not found`);
       }
 
       if (session) {
@@ -754,10 +757,10 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      if (error instanceof NotFoundException) {
+      if (error instanceof CustomError) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to fetch student');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch student');
     } finally {
       if (session) {
         session.endSession();
@@ -782,7 +785,7 @@ export class UserService {
         .findByIdAndUpdate(id, updateStudentDto, { new: true, session })
         .exec();
       if (!updatedStudent) {
-        throw new NotFoundException(`Student with ID ${id} not found`);
+        throw new CustomError(HttpStatus.NOT_FOUND, `Student with ID ${id} not found`);
       }
 
       if (session) {
@@ -793,10 +796,10 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      if (error instanceof NotFoundException) {
+      if (error instanceof CustomError) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to update student');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to update student');
     } finally {
       if (session) {
         session.endSession();
@@ -819,7 +822,7 @@ export class UserService {
         .session(session)
         .exec();
       if (!result) {
-        throw new NotFoundException(`Student with ID ${id} not found`);
+        throw new CustomError(HttpStatus.NOT_FOUND, `Student with ID ${id} not found`);
       }
 
       if (session) {
@@ -829,10 +832,10 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      if (error instanceof NotFoundException) {
+      if (error instanceof CustomError) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to remove student');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to remove student');
     } finally {
       if (session) {
         session.endSession();
@@ -862,7 +865,7 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      throw new InternalServerErrorException('Failed to create employee');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to create employee');
     } finally {
       if (session) {
         session.endSession();
@@ -890,7 +893,7 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      throw new InternalServerErrorException('Failed to fetch employees');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch employees');
     } finally {
       if (session) {
         session.endSession();
@@ -913,7 +916,7 @@ export class UserService {
         .session(session)
         .exec();
       if (!employee) {
-        throw new NotFoundException(`any with ID ${id} not found`);
+        throw new CustomError(HttpStatus.NOT_FOUND, `any with ID ${id} not found`);
       }
 
       if (session) {
@@ -924,10 +927,10 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      if (error instanceof NotFoundException) {
+      if (error instanceof CustomError) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to fetch employee');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch employee');
     } finally {
       if (session) {
         session.endSession();
@@ -952,7 +955,7 @@ export class UserService {
         .findByIdAndUpdate(id, updateEmployeeDto, { new: true, session })
         .exec();
       if (!updatedEmployee) {
-        throw new NotFoundException(`any with ID ${id} not found`);
+        throw new CustomError(HttpStatus.NOT_FOUND, `any with ID ${id} not found`);
       }
 
       if (session) {
@@ -963,10 +966,10 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      if (error instanceof NotFoundException) {
+      if (error instanceof CustomError) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to update employee');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to update employee');
     } finally {
       if (session) {
         session.endSession();
@@ -989,7 +992,7 @@ export class UserService {
         .session(session)
         .exec();
       if (!result) {
-        throw new NotFoundException(`any with ID ${id} not found`);
+        throw new CustomError(HttpStatus.NOT_FOUND, `any with ID ${id} not found`);
       }
 
       if (session) {
@@ -999,10 +1002,10 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      if (error instanceof NotFoundException) {
+      if (error instanceof CustomError) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to remove employee');
+      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to remove employee');
     } finally {
       if (session) {
         session.endSession();

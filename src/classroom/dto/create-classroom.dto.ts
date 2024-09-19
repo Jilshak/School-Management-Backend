@@ -1,6 +1,20 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsMongoId, IsArray, ArrayMinSize } from 'class-validator';
-import { Types } from 'mongoose';
+import { IsNotEmpty, IsString, IsMongoId, IsArray, ArrayMinSize, IsDate, ValidateNested, IsOptional } from 'class-validator';
+import { Type } from 'class-transformer';
+
+class AcademicYearDto {
+  @ApiProperty({ description: 'The start date of the academic year' })
+  @IsNotEmpty()
+  @IsDate()
+  @Type(() => Date)
+  startDate: Date;
+
+  @ApiProperty({ description: 'The end date of the academic year' })
+  @IsNotEmpty()
+  @IsDate()
+  @Type(() => Date)
+  endDate: Date;
+}
 
 export class CreateClassroomDto {
   @ApiProperty({ description: 'The name of the classroom' })
@@ -8,10 +22,10 @@ export class CreateClassroomDto {
   @IsString()
   name: string;
 
-  @ApiProperty({ description: 'The ID of the class teacher' })
-  @IsNotEmpty()
+  @ApiProperty({ description: 'The ID of the class teacher', required: false })
   @IsMongoId()
-  classTeacherId: string;
+  @IsOptional()
+  classTeacherId?: string;
 
   @ApiProperty({ description: 'An array of subject IDs', type: [String] })
   @IsArray()
@@ -21,6 +35,7 @@ export class CreateClassroomDto {
 
   @ApiProperty({ description: 'The academic year of the classroom' })
   @IsNotEmpty()
-  @IsString()
-  academicYear: string;
+  @ValidateNested()
+  @Type(() => AcademicYearDto)
+  academicYear: AcademicYearDto;
 }

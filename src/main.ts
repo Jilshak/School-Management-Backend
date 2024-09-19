@@ -2,9 +2,11 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
+import { ErrorHandlerMiddleware } from './common/middleware/error-handler.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.use(new ErrorHandlerMiddleware().use);
 
   const corsOptions: CorsOptions = {
     origin: true, // Frontend URL

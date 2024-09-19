@@ -16,10 +16,10 @@ enum DayOfWeek {
 @Schema()
 class TimeSlot {
   @Prop({ required: true })
-  startTime: Date;
+  startTime: number;
 
   @Prop({ required: true })
-  endTime: Date;
+  endTime: number;
 
   @Prop({ type: Types.ObjectId, ref: 'Subject', required: true })
   subjectId: Types.ObjectId;

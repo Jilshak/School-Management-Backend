@@ -13,12 +13,40 @@ export class User extends Document {
   @Prop({ type: [String], enum: UserRole, default: [UserRole.STUDENT] })
   roles: UserRole[];
 
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'School' })
+  @Prop({
+    type: MongooseSchema.Types.ObjectId,
+    ref: 'School',
+    validate: {
+      validator: async function (value) {
+        const Classroom = this.model('School');
+        const classroom = await Classroom.findById(value);
+        if (!classroom) {
+          throw new Error('School does not exist');
+        }
+        return true;
+      },
+      message: 'School does not exist',
+    },
+  })
   schoolId: MongooseSchema.Types.ObjectId;
 
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Classroom' })
-  classId:MongooseSchema.Types.ObjectId
-  
+  @Prop({
+    type: MongooseSchema.Types.ObjectId,
+    ref: 'Classroom',
+    validate: {
+      validator: async function (value) {
+        const Classroom = this.model('Classroom');
+        const classroom = await Classroom.findById(value);
+        if (!classroom) {
+          throw new Error('Classroom does not exist');
+        }
+        return true;
+      },
+      message: 'Classroom does not exist',
+    },
+  })
+  classId: MongooseSchema.Types.ObjectId;
+
   @Prop({ type: Boolean, default: true })
   isActive: boolean;
 }

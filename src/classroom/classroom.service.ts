@@ -81,8 +81,12 @@ export class ClassroomService {
         subjects: createClassroomDto.subjects.map(
           (subject) => new Types.ObjectId(subject),
         ),
-        classTeacherId: new Types.ObjectId(createClassroomDto.classTeacherId),
+        classTeacherId:createClassroomDto.classTeacherId && new Types.ObjectId(createClassroomDto.classTeacherId),
         schoolId,
+        academicYear: {
+          startDate: new Date(createClassroomDto.academicYear.startDate),
+          endDate: new Date(createClassroomDto.academicYear.endDate),
+        },
       });
       const result = await createdClassroom.save({ session });
 
@@ -118,19 +122,8 @@ export class ClassroomService {
         session.startTransaction();
       }
 
-      let aggregationPipeline: any = [
-        { $match: { schoolId: new Types.ObjectId(schoolId) } },
-        {
-          $lookup: {
-            from: 'teachers',
-            localField: 'classTeacherId',
-            foreignField: 'userId',
-            as: 'teacherDetails',
-          },
-        },
-        {
-          $unwind: '$teacherDetails',
-        },
+      let aggregationPipeline: any[] = [
+        { $match: { schoolId: new Types.ObjectId(schoolId), isActive: true } },
         {
           $lookup: {
             from: 'users',
@@ -140,7 +133,20 @@ export class ClassroomService {
           },
         },
         {
-          $unwind: '$userDetails',
+          $lookup: {
+            from: 'staffs',
+            localField: 'classTeacherId',
+            foreignField: 'userId',
+            as: 'staffDetails',
+          },
+        },
+        {
+          $lookup: {
+            from: 'teachers',
+            localField: 'classTeacherId',
+            foreignField: 'userId',
+            as: 'teacherDetails',
+          },
         },
         {
           $lookup: {
@@ -151,32 +157,28 @@ export class ClassroomService {
           },
         },
         {
-          $project: {
-            _id: 1,
-            name: 1,
-            academicYear: 1,
-            classTeacherDetails: {
-              name: {
-                $concat: [
-                  '$teacherDetails.firstName',
-                  ' ',
-                  '$teacherDetails.lastName',
-                ],
-              },
-              email: '$userDetails.email',
-              phoneNumber: '$userDetails.contactNumber',
-            },
-            subjects: {
-              $map: {
-                input: '$subjectDetails',
-                as: 'subject',
-                in: {
-                  _id: '$$subject._id',
-                  name: '$$subject.name',
-                  code: '$$subject.code',
-                },
-              },
-            },
+          $lookup: {
+            from: 'users',
+            localField: '_id',
+            foreignField: 'classId',
+            as: 'students',
+          },
+        },
+        {
+          $addFields: {
+            students: {
+              $filter: {
+                input: '$students',
+                as: 'student',
+                cond: { $eq: ['$$student.isActive', true] }
+              }
+            }
+          }
+        },
+        {
+          $addFields: {
+            studentCount: { $size: '$students' },
+            hasClassTeacher: { $gt: [{ $size: '$userDetails' }, 0] },
           },
         },
       ];
@@ -186,11 +188,51 @@ export class ClassroomService {
           $match: {
             $or: [
               { name: { $regex: search, $options: 'i' } },
-              { academicYear: { $regex: search, $options: 'i' } },
+              { 'staffDetails.firstName': { $regex: search, $options: 'i' } },
+              { 'staffDetails.lastName': { $regex: search, $options: 'i' } },
+              { 'staffDetails.email': { $regex: search, $options: 'i' } },
             ],
           },
         });
       }
+
+      aggregationPipeline.push({
+        $project: {
+          _id: 1,
+          name: 1,
+          academicYear: 1,
+          classTeacherDetails: {
+            $cond: {
+              if: '$hasClassTeacher',
+              then: {
+                name: {
+                  $concat: [
+                    { $arrayElemAt: ['$staffDetails.firstName', 0] },
+                    ' ',
+                    { $arrayElemAt: ['$staffDetails.lastName', 0] },
+                  ],
+                },
+                email: { $arrayElemAt: ['$staffDetails.email', 0] },
+                phoneNumber: { $arrayElemAt: ['$staffDetails.contactNumber', 0] },
+                _id: { $arrayElemAt: ['$staffDetails._id', 0] },
+              },
+              else: null,
+            },
+          },
+          subjects: {
+            $map: {
+              input: '$subjectDetails',
+              as: 'subject',
+              in: {
+                _id: '$$subject._id',
+                name: '$$subject.name',
+                code: '$$subject.code',
+              },
+            },
+          },
+          studentCount: 1,
+        },
+      });
 
       const countPipeline = [...aggregationPipeline, { $count: 'totalCount' }];
       const [countResult] = await this.classroomModel
@@ -198,7 +240,7 @@ export class ClassroomService {
         .session(session);
       const totalCount = countResult ? countResult.totalCount : 0;
 
-      if (!full && page !== undefined && limit !== undefined) {
+      if (!full) {
         const skip = (page - 1) * limit;
         aggregationPipeline.push({ $skip: skip }, { $limit: limit });
       }
@@ -207,18 +249,10 @@ export class ClassroomService {
         .aggregate(aggregationPipeline)
         .session(session);
 
-      // Filter out classrooms where classTeacher doesn't match the search
-      const filteredClassrooms = classrooms.filter(
-        (classroom) =>
-          classroom.classTeacherDetails &&
-          classroom.userDetails &&
-          classroom.userDetails.isActive,
-      );
-
       if (session) {
         await session.commitTransaction();
       }
-      return { classrooms: filteredClassrooms, totalCount };
+      return { classrooms, totalCount };
     } catch (error) {
       if (session) {
         await session.abortTransaction();
@@ -264,18 +298,29 @@ export class ClassroomService {
           { $unwind: '$classTeacherUserDetails' },
           {
             $lookup: {
-              from: 'students',
+              from: 'users',
               localField: '_id',
               foreignField: 'classId',
-              as: 'studentsDetails',
+              as: 'studentsUserDetails',
             },
           },
           {
+            $addFields: {
+              studentsUserDetails: {
+                $filter: {
+                  input: '$studentsUserDetails',
+                  as: 'student',
+                  cond: { $eq: ['$$student.isActive', true] }
+                }
+              }
+            }
+          },
+          {
             $lookup: {
-              from: 'users',
-              localField: 'studentsDetails.userId',
-              foreignField: '_id',
-              as: 'studentsUserDetails',
+              from: 'students',
+              localField: 'studentsUserDetails._id',
+              foreignField: 'userId',
+              as: 'studentsDetails',
             },
           },
           {
@@ -300,37 +345,41 @@ export class ClassroomService {
               },
               students: {
                 $map: {
-                  input: '$studentsDetails',
+                  input: '$studentsUserDetails',
                   as: 'student',
                   in: {
                     _id: '$$student._id',
-                    firstName: '$$student.firstName',
-                    lastName: '$$student.lastName',
-                    enrollmentNumber: '$$student.enrollmentNumber',
-                    email: {
-                      $arrayElemAt: [
-                        '$studentsUserDetails.email',
-                        {
-                          $indexOfArray: [
-                            '$studentsUserDetails.userId',
-                            '$$student.userId',
-                          ],
+                    studentDetails: {
+                      $let: {
+                        vars: {
+                          matchedStudent: {
+                            $arrayElemAt: [
+                              {
+                                $filter: {
+                                  input: '$studentsDetails',
+                                  cond: { $eq: ['$$this.userId', '$$student._id'] }
+                                }
+                              },
+                              0
+                            ]
+                          }
                         },
-                      ],
+                        in: {
+                          $cond: {
+                            if: { $ifNull: ['$$matchedStudent', false] },
+                            then: '$$matchedStudent',
+                            else: null
+                          }
+                        }
+                      }
                     },
-                    isActive: {
-                      $arrayElemAt: [
-                        '$studentsUserDetails.isActive',
-                        {
-                          $indexOfArray: [
-                            '$studentsUserDetails.userId',
-                            '$$student.userId',
-                          ],
-                        },
-                      ],
+                    classDetails: {
+                      _id: '$_id',
+                      name: '$name',
+                      academicYear: '$academicYear',
                     },
-                  },
-                },
+                  }
+                }
               },
               subjects: {
                 $map: {
@@ -338,7 +387,7 @@ export class ClassroomService {
                   as: 'subject',
                   in: {
                     _id: '$$subject._id',
-                    subjectName: '$$subject.subjectName',
+                    subjectName: '$$subject.name',
                     isActive: '$$subject.isActive',
                   },
                 },
@@ -385,10 +434,22 @@ export class ClassroomService {
         session.startTransaction();
       }
 
+      const updatedDto = {
+        ...updateClassroomDto,
+        classTeacherId: new Types.ObjectId(updateClassroomDto.classTeacherId),
+        subjects: updateClassroomDto.subjects.map(
+          (subject) => new Types.ObjectId(subject),
+        ),
+        academicYear: {
+          startDate: new Date(updateClassroomDto.academicYear.startDate),
+          endDate: new Date(updateClassroomDto.academicYear.endDate),
+        },
+      };
+
       const updatedClassroom = await this.classroomModel
         .findOneAndUpdate(
           { _id: new Types.ObjectId(id), schoolId },
-          updateClassroomDto,
+          updatedDto,
           { new: true, session },
         )
         .exec();
@@ -454,7 +515,7 @@ export class ClassroomService {
       const result = await this.classroomModel
         .findOneAndUpdate(
           { _id: new Types.ObjectId(id), schoolId },
-          { $set: { isActive: false } },
+          { $set: { isActive: false, classTeacherId: undefined } },
         )
         .session(session)
         .exec();
@@ -637,32 +698,55 @@ export class ClassroomService {
 
   async getTeacherNotClassTeacher(schoolId: Types.ObjectId) {
     try {
-      const classTeachers = await this.classroomModel.distinct('classTeacherId', { schoolId });
-      
+      const classTeachers = await this.classroomModel.distinct(
+        'classTeacherId',
+        { schoolId },
+      );
+
       const nonClassTeachers = await this.userModel.aggregate([
-        { $match: { schoolId, role: 'teacher', isActive: true, _id: { $nin: classTeachers } } },
+        {
+          $match: {
+            schoolId,
+            roles: 'teacher',
+            isActive: true,
+            _id: { $nin: classTeachers },
+          },
+        },
+        {
+          $lookup: {
+            from: 'staffs',
+            localField: '_id',
+            foreignField: 'userId',
+            as: 'staffDetails',
+          },
+        },
+        { $unwind: '$staffDetails' },
         {
           $lookup: {
             from: 'teachers',
             localField: '_id',
             foreignField: 'userId',
-            as: 'teacherDetails'
-          }
+            as: 'teacherDetails',
+          },
         },
         { $unwind: '$teacherDetails' },
         {
           $project: {
             _id: 1,
             email: 1,
-            firstName: '$teacherDetails.firstName',
-            lastName: '$teacherDetails.lastName'
-          }
-        }
+            firstName: '$staffDetails.firstName',
+            lastName: '$staffDetails.lastName',
+            teacherId: '$teacherDetails._id',
+          },
+        },
       ]);
 
       return nonClassTeachers;
     } catch (err) {
-      throw new InternalServerErrorException('Failed to fetch non-class teachers');
+      console.error('Error fetching non-class teachers:', err);
+      throw new InternalServerErrorException(
+        'Failed to fetch non-class teachers',
+      );
     }
   }
 }

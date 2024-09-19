@@ -50,6 +50,15 @@ export class ClassroomController {
     return this.classroomService.findAll(schoolId, search, full, page, limit);
   }
 
+  @Get("/get-teachers-not-classTeacher")
+  @Roles(UserRole.ADMIN,UserRole.ADMISSION_TEAM)
+  @ApiOperation({ summary: "The Teachers that don't have classes" })
+  @ApiResponse({ status: 200, description: "The Teachers that don't have classes" })
+  @ApiResponse({ status: 404, description: 'Something went wrong' })
+  async getTeacherNotClassTeacher(@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    return this.classroomService.getTeacherNotClassTeacher(schoolId);
+  }
+
   @Get(':id')
   @Roles()
   @ApiOperation({ summary: 'Get a classroom by id' })
@@ -81,13 +90,5 @@ export class ClassroomController {
     return this.classroomService.remove(id,schoolId,makeStudentsAlsoInactive);
   }
 
-  @Get("/get-teachers-not-classTeacher")
-  @Roles(UserRole.ADMIN,UserRole.ADMISSION_TEAM)
-  @ApiOperation({ summary: 'Delete a classroom' })
-  @ApiResponse({ status: 200, description: "The Teachers that don't have classes" })
-  @ApiResponse({ status: 404, description: 'Something went wrong' })
-  @ApiParam({ name: 'id', required: true, description: 'Classroom ID' })
-  async getTeacherNotClassTeacher(@LoginUser("schoolId") schoolId:Types.ObjectId) {
-    return this.classroomService.getTeacherNotClassTeacher(schoolId);
-  }
+
 }

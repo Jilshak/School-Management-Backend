@@ -7,6 +7,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { User, UserSchema } from '../domains/schema/user.schema';
 import { AuthController } from './auth.controller';
+import {
+  Classroom,
+  ClassroomSchema,
+} from 'src/domains/schema/classroom.schema';
 
 @Module({
   imports: [
@@ -15,11 +19,13 @@ import { AuthController } from './auth.controller';
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '1h' },
       }),
       inject: [ConfigService],
     }),
-    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+    MongooseModule.forFeature([
+      { name: User.name, schema: UserSchema },
+      { name: Classroom.name, schema: ClassroomSchema },
+    ]),
   ],
   providers: [AuthService, JwtStrategy],
   exports: [AuthService, PassportModule],

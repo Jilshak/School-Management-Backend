@@ -4,11 +4,14 @@ import { InjectModel, InjectConnection } from '@nestjs/mongoose';
 import { Model, Connection } from 'mongoose';
 import { User } from '../domains/schema/user.schema';
 import * as bcrypt from 'bcrypt';
+import { UserRole } from 'src/domains/enums/user-roles.enum';
+import { Classroom } from 'src/domains/schema/classroom.schema';
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
+    @InjectModel(Classroom.name) private classroomModel: Model<Classroom>,
     private jwtService: JwtService,
     @InjectConnection() private connection: Connection
   ) {}
@@ -26,13 +29,19 @@ export class AuthService {
     const user = await this.userModel.findOne({ username });
     if (user && await bcrypt.compare(password, user.password)) {
       const { password, ...result } = user.toObject();
+      if(user.roles.includes(UserRole.TEACHER)){
+        const classTeacherOf =await this.classroomModel.findOne({classTeacherId:user._id})
+        if(classTeacherOf){
+          return {...result,classTacherOf: classTeacherOf._id}
+        }
+      }
       return result;
     }
     return null;
   }
 
   async login(user: any) {
-    const payload = { username: user.username, sub: user._id,role:user.roles };
+    const payload = { username: user?.username, sub: user?._id,role:user?.roles,classTeacherOf:user?.classTeacherOf };
     return {
       access_token: this.jwtService.sign(payload,{secret:process.env.JWT_SECRET as string})
     };

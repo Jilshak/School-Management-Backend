@@ -8,6 +8,7 @@ import { Staff, StaffSchema } from '../domains/schema/staff.schema';
 import { Teacher, TeacherSchema } from '../domains/schema/teacher.schema';
 import { Subject, SubjectSchema } from '../domains/schema/subject.schema';
 import { GuardsModule } from '../guards/guards.module';
+import { Classroom, ClassroomSchema } from 'src/domains/schema/classroom.schema';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { GuardsModule } from '../guards/guards.module';
       { name: Staff.name, schema: StaffSchema },
       { name: Teacher.name, schema: TeacherSchema },
       { name: Subject.name, schema: SubjectSchema },
+      { name: Classroom.name, schema: ClassroomSchema },
     ]),
     GuardsModule,
   ],

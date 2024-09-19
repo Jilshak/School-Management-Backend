@@ -33,12 +33,12 @@ export class TimetableController {
   @ApiOperation({ summary: 'Get available staff for a given time slot' })
   @ApiResponse({ status: 200, description: 'Return the available staff.' })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
-  @ApiQuery({ name: 'startTime', required: true, type: Date })
-  @ApiQuery({ name: 'endTime', required: true, type: Date })
+  @ApiQuery({ name: 'startTime', required: true, type: Number })
+  @ApiQuery({ name: 'endTime', required: true, type: Number })
   @ApiQuery({ name: 'subjectId', required: true, type: String })
   findStaffAvailable(
-    @Query('startTime') startTime: Date,
-    @Query('endTime') endTime: Date,
+    @Query('startTime') startTime: number,
+    @Query('endTime') endTime: number,
     @Query('subjectId') subjectId: string,
     @LoginUser('schoolId') schoolId: Types.ObjectId
   ) {

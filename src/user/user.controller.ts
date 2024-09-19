@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, Patch, ValidationPipe } from '@nestjs/common';
 import { UserService } from './user.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../shared/guards/roles.guard';
@@ -10,6 +10,7 @@ import { User } from '../domains/schema/user.schema';
 import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
 import { Types } from 'mongoose';
 import { UserRole } from 'src/domains/enums/user-roles.enum';
+import { HttpException, HttpStatus } from '@nestjs/common';
 
 @ApiTags('user')
 @ApiBearerAuth()
@@ -24,8 +25,13 @@ export class UserController {
   @ApiResponse({ status: 201, description: 'The user has been successfully created.', type: String })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
   @ApiBody({ type: CreateUserDto })
-  create(@Body() createUserDto: CreateUserDto,@LoginUser("schoolId") schoolId) {
-    return this.userService.create(createUserDto,schoolId);
+  async create(@Body(ValidationPipe) createUserDto: CreateUserDto, @LoginUser("schoolId") schoolId) {
+    try {
+      const res = await this.userService.create(createUserDto, schoolId);
+      return { status: 201, description: res };
+    } catch (error) {
+      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+    }
   }
 
   @Get()
@@ -69,7 +75,7 @@ export class UserController {
     description: 'Whether to return full user details.',
     example: false
   })
-  findAll(
+  async findAll(
     @Query('role') role: UserRole[],
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
@@ -77,9 +83,12 @@ export class UserController {
     @Query('full') full: boolean = false,
     @LoginUser('schoolId') schoolId: Types.ObjectId
   ) {
-    return this.userService.findAll(role, schoolId, full, page, limit, search);
+    try {
+      return await this.userService.findAll(role, schoolId, full, page, limit, search);
+    } catch (error) {
+      throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
-
 
   @Get("/count-by-role")
   @Roles(UserRole.ADMIN,UserRole.HR)
@@ -107,8 +116,8 @@ export class UserController {
   @ApiResponse({ status: 200, description: 'Return the user.', type: User })
   @ApiResponse({ status: 404, description: 'User not found.' })
   @ApiParam({ name: 'id', required: true, description: 'User ID' })
-  findOne(@Param('id') id: string,@LoginUser("schoolId") schoolId) {
-    return this.userService.findOne(id,schoolId);
+  findOne(@Param('id') id: string, @LoginUser("schoolId") schoolId) {
+    return this.userService.findOne(id, schoolId);
   }
 
   @Patch(':id')
@@ -119,8 +128,8 @@ export class UserController {
   @ApiResponse({ status: 404, description: 'User not found.' })
   @ApiParam({ name: 'id', required: true, description: 'User ID' })
   @ApiBody({ type: UpdateUserDto })
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto,@LoginUser("schoolId") schoolId) {
-    return this.userService.update(id, updateUserDto,schoolId);
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @LoginUser("schoolId") schoolId) {
+    return this.userService.update(id, updateUserDto, schoolId);
   }
 
   @Delete(':id')
@@ -129,7 +138,11 @@ export class UserController {
   @ApiResponse({ status: 200, description: 'The user has been successfully deleted.' })
   @ApiResponse({ status: 404, description: 'User not found.' })
   @ApiParam({ name: 'id', required: true, description: 'User ID' })
-  remove(@Param('id') id: string,@LoginUser("schoolId") schoolId) {
-    return this.userService.remove(id,schoolId);
+  async remove(@Param('id') id: string, @LoginUser("schoolId") schoolId) {
+    try {
+      return await this.userService.remove(id, schoolId);
+    } catch (error) {
+      throw new HttpException(error.message, HttpStatus.NOT_FOUND);
+    }
   }
 }

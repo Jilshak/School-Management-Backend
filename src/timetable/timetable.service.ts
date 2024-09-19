@@ -52,8 +52,11 @@ export class TimetableService {
       );
       await this.checkTeacherConflicts(modifiedDto, schoolId, session);
 
-      const filter = { classId: modifiedDto.classId, schoolId: modifiedDto.schoolId };
-      const update = { $set: modifiedDto };
+      // Filter out days with empty schedules
+      const filteredDto = this.filterEmptyDays(modifiedDto);
+
+      const filter = { classId: filteredDto.classId, schoolId: filteredDto.schoolId };
+      const update = { $set: filteredDto };
       const options = { upsert: true, new: true, session };
 
       const result = await this.timetableModel.findOneAndUpdate(filter, update, options);
@@ -90,13 +93,25 @@ export class TimetableService {
       ...Object.fromEntries(
         days.map((day) => [
           day,
-          dto[day].map((slot) => ({
+          dto[day]?.map((slot) => ({
             ...slot,
+            startTime: Number(slot.startTime),
+            endTime: Number(slot.endTime),
             subjectId: new Types.ObjectId(slot.subjectId),
             teacherId: new Types.ObjectId(slot.teacherId),
-          })),
+          })) || [],
         ]),
       ),
+    };
+  }
+
+  private filterEmptyDays(dto: any): any {
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const filteredDays = days.filter(day => dto[day] && dto[day].length > 0);
+    
+    return {
+      ...dto,
+      ...Object.fromEntries(filteredDays.map(day => [day, dto[day]]))
     };
   }
 
@@ -141,10 +156,15 @@ export class TimetableService {
     }
   }
 
-  async findAvailableTeacher(startTime: Date, endTime: Date, subjectId: string, schoolId: Types.ObjectId): Promise<User[]> {
-    const session = await this.connection.startSession();
+  async findAvailableTeacher(startTime: number, endTime: number, subjectId: string, schoolId: Types.ObjectId): Promise<User[]> {
+    let session = null;
     try {
-      session.startTransaction();
+      const supportsTransactions = await this.supportsTransactions();
+
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
 
       // Find all teachers who teach the given subject
       const teachers = await this.userModel.aggregate([
@@ -181,6 +201,17 @@ export class TimetableService {
         },
         {
           $unwind: '$staffDetails'
+        },
+        {
+          $project: {
+            _id: 1,
+            firstName: "$staffDetails.firstName",
+            lastName: "$staffDetails.lastName",
+            email: "$staffDetails.email",
+            roles: 1,
+            'teacherDetails.subjects': 1,
+            'staffDetails.employeeId': 1,
+          }
         }
       ]).session(session);
 
@@ -235,13 +266,19 @@ export class TimetableService {
         !unavailableTeacherIds.includes(teacher._id.toString())
       );
 
-      await session.commitTransaction();
+      if (session) {
+        await session.commitTransaction();
+      }
       return availableTeachers;
     } catch (error) {
-      await session.abortTransaction();
+      if (session) {
+        await session.abortTransaction();
+      }
       throw new InternalServerErrorException('Failed to find available staff');
     } finally {
-      session.endSession();
+      if (session) {
+        session.endSession();
+      }
     }
   }
 
@@ -383,6 +420,14 @@ export class TimetableService {
           },
           {
             $lookup: {
+              from: 'staffs',
+              localField: `${day}.teacherId`,
+              foreignField: 'userId',
+              as: `${day}TeacherDetails`
+            }
+          },
+          {
+            $lookup: {
               from: 'subjects',
               localField: `${day}.subjectId`,
               foreignField: '_id',
@@ -405,7 +450,15 @@ export class TimetableService {
                     $mergeObjects: [
                       '$$slot',
                       {
-                        teacher: { $arrayElemAt: [`$${day}Teachers`, { $indexOfArray: [`$${day}.teacherId`, '$$slot.teacherId'] }] },
+                        teacher: {
+                          $mergeObjects: [
+                            { $arrayElemAt: [`$${day}Teachers`, { $indexOfArray: [`$${day}.teacherId`, '$$slot.teacherId'] }] },
+                            {
+                              firstName: { $arrayElemAt: [`$${day}TeacherDetails.firstName`, { $indexOfArray: [`$${day}.teacherId`, '$$slot.teacherId'] }] },
+                              lastName: { $arrayElemAt: [`$${day}TeacherDetails.lastName`, { $indexOfArray: [`$${day}.teacherId`, '$$slot.teacherId'] }] }
+                            }
+                          ]
+                        },
                         subject: { $arrayElemAt: [`$${day}Subjects`, { $indexOfArray: [`$${day}.subjectId`, '$$slot.subjectId'] }] }
                       }
                     ]
