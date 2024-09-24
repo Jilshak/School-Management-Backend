@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, IsUrl, IsOptional } from 'class-validator';
-import { CreateExamDto } from './create-exam.dto';
+import { CreateSemExamDto } from './create-exam.dto';
 
-export class CreateOnlineExamDto extends CreateExamDto {
+export class CreateOnlineExamDto extends CreateSemExamDto {
   @ApiProperty({ description: 'The URL for the online exam' })
   @IsNotEmpty()
   @IsUrl()

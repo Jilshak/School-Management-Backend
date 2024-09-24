@@ -5,10 +5,10 @@ import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/shared/guards/roles.guard';
-import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
 import { Types } from 'mongoose';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from 'src/domains/enums/user-roles.enum';
+import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
 
 @ApiTags('attendance')
 @ApiBearerAuth()
@@ -49,20 +49,32 @@ export class AttendanceController {
       }
     }
   })
-  create(@Body() createAttendanceDto: CreateAttendanceDto) {
-    return this.attendanceService.create(createAttendanceDto);
+  create(@Body() createAttendanceDto: CreateAttendanceDto,@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    return this.attendanceService.create(createAttendanceDto,schoolId);
   }
 
   @Get(":classId")
   @ApiOperation({ summary: 'Get all attendance records for a class' })
   @ApiParam({ name: 'classId', type: 'string', description: 'ID of the class' })
+  @ApiQuery({ name: 'month', type: 'date', description: 'ID of the class' })
   @ApiResponse({ status: 200, description: 'Returns all attendance records for the specified class.' })
   @ApiResponse({ status: 404, description: 'Class not found.' })
-  findAll(@Param("classId") classId: string) {
-    return this.attendanceService.findAll(classId);
+  findAll(@Param("classId") classId: string,@Query("month") month:Date) {
+    return this.attendanceService.findAll(classId,month);
   }
 
-  @Get(':studentId')
+  @Get("/get-attendance-single-day/:classId")
+  @Roles(UserRole.ADMIN,UserRole.TEACHER)
+  @ApiOperation({ summary: 'Get all attendance records for a class' })
+  @ApiParam({ name: 'classId', type: 'string', description: 'ID of the class' })
+  @ApiQuery({ name: 'date', type: 'date', description: 'attendance date' })
+  @ApiResponse({ status: 200, description: 'Returns all attendance records for the specified class.' })
+  @ApiResponse({ status: 404, description: 'Class not found.' })
+  findOfaDate(@Param("classId") classId: string,@Query("date") date:Date,@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    return this.attendanceService.findOfaDate(classId,schoolId,date);
+  }
+
+  @Get('/by-student/:studentId')
   @ApiOperation({ summary: 'Get attendance records for a student' })
   @ApiParam({ name: 'studentId', type: 'string', description: 'ID of the student' })
   @ApiQuery({ name: 'month', type: 'number', required: false, description: 'Month number (0-11, where 0 is January). If not provided, current month is used.' })

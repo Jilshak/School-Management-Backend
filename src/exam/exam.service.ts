@@ -1,23 +1,32 @@
-import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
 import { Model, Connection, Types } from 'mongoose';
-import { Exam } from '../domains/schema/exam.schema';
+import { SemExam } from '../domains/schema/sem-exam.schema';
 import { ExamTimeTable } from '../domains/schema/exam-time-table.schema';
 import { Result } from '../domains/schema/result.schema';
-import { CreateExamDto } from './dto/create-exam.dto';
-import { UpdateExamDto } from './dto/update-exam.dto';
+import { CreateClassTest, CreateSemExamDto } from './dto/create-exam.dto';
+import { UpdateSemExamDto, UpdateClassTestDto } from './dto/update-exam.dto';
 import { CreateOnlineExamDto } from './dto/create-online-exam.dto';
 import { CreateOfflineExamDto } from './dto/create-offline-exam.dto';
 import { CreateExamTimeTableDto } from './dto/create-exam-time-table.dto';
 import { CreateResultDto } from './dto/create-result.dto';
+import { ClassTest } from 'src/domains/schema/class-test.schema';
+import { TimeTable } from 'src/domains/schema/timetable.schema';
 
 @Injectable()
 export class ExamService {
   constructor(
-    @InjectModel(Exam.name) private examModel: Model<Exam>,
-    @InjectModel(ExamTimeTable.name) private examTimeTableModel: Model<ExamTimeTable>,
+    @InjectModel(SemExam.name) private semExamModel: Model<SemExam>,
+    @InjectModel(TimeTable.name) private timeTableModel: Model<TimeTable>,
+    @InjectModel(ClassTest.name) private classTestModel: Model<ClassTest>,
+    @InjectModel(ExamTimeTable.name)
+    private examTimeTableModel: Model<ExamTimeTable>,
     @InjectModel(Result.name) private resultModel: Model<Result>,
-    @InjectConnection() private connection: Connection
+    @InjectConnection() private connection: Connection,
   ) {}
 
   private async supportsTransactions(): Promise<boolean> {
@@ -29,28 +38,42 @@ export class ExamService {
     }
   }
 
-  async create(createExamDto: CreateExamDto): Promise<Exam> {
+  async createSemExam(
+    createExamDto: CreateSemExamDto,
+    schoolId: Types.ObjectId,
+  ): Promise<SemExam> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const createdExam = new this.examModel(createExamDto);
-      const result = await createdExam.save({ session });
+      const newExam = new this.semExamModel({
+        classId: createExamDto.classId,
+        exams: createExamDto.exam.map((exam) => ({
+          subjectId: exam.subjectId,
+          date: exam.date,
+          startTime: exam.startTime,
+          endTime: exam.endTime,
+          description: exam.description,
+        })),
+        schoolId,
+      });
+
+      const savedExam = await newExam.save({ session });
 
       if (session) {
         await session.commitTransaction();
       }
-      return result;
+      return savedExam;
     } catch (error) {
       if (session) {
         await session.abortTransaction();
       }
-      throw new InternalServerErrorException('Failed to create exam');
+      throw new InternalServerErrorException('Failed to create sem exam');
     } finally {
       if (session) {
         session.endSession();
@@ -58,28 +81,39 @@ export class ExamService {
     }
   }
 
-  async createOnlineExam(createOnlineExamDto: CreateOnlineExamDto): Promise<Exam> {
+  async createClassTest(
+    createExamDto: CreateClassTest,
+    schoolId: Types.ObjectId,
+  ): Promise<ClassTest> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const createdOnlineExam = new this.examModel({ ...createOnlineExamDto, type: 'online' });
-      const result = await createdOnlineExam.save({ session });
+      const newExam = new this.classTestModel({
+        classId: new Types.ObjectId(createExamDto.classId),
+        date: createExamDto.date,
+        schoolId,
+        subjectId: new Types.ObjectId(createExamDto.subjectId),
+        periods: createExamDto.periods.map((val) => new Types.ObjectId(val)),
+      });
+
+      const savedExam = await newExam.save({ session });
 
       if (session) {
         await session.commitTransaction();
       }
-      return result;
+      return savedExam;
     } catch (error) {
+      console.log(error);
       if (session) {
         await session.abortTransaction();
       }
-      throw new InternalServerErrorException('Failed to create online exam');
+      throw new InternalServerErrorException('Failed to create sem exam');
     } finally {
       if (session) {
         session.endSession();
@@ -87,215 +121,445 @@ export class ExamService {
     }
   }
 
-  async createOfflineExam(createOfflineExamDto: CreateOfflineExamDto): Promise<Exam> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
-      
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
+  async findAllOfflineExams(
+    page: number,
+    limit: number,
+    search: string,
+    schoolId: Types.ObjectId,
+  ) {
+    const skip = (page - 1) * limit;
 
-      const createdOfflineExam = new this.examModel({ ...createOfflineExamDto, type: 'offline' });
-      const result = await createdOfflineExam.save({ session });
+    // Remove the separate searchRegex variable
+    // const searchRegex = new RegExp(search, 'i');
 
-      if (session) {
-        await session.commitTransaction();
-      }
-      return result;
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      throw new InternalServerErrorException('Failed to create offline exam');
-    } finally {
-      if (session) {
-        session.endSession();
-      }
+    // Ensure limit is a number
+    const numericLimit = Number(limit);
+
+    const classTests = await this.classTestModel.aggregate([
+      {
+        $match: {
+          schoolId: new Types.ObjectId(schoolId),
+        },
+      },
+      {
+        $lookup: {
+          from: 'subjects',
+          localField: 'subjectId',
+          foreignField: '_id',
+          as: 'subjectId',
+        },
+      },
+      {
+        $lookup: {
+          from: 'classrooms',
+          localField: 'classId',
+          foreignField: '_id',
+          as: 'classId',
+        },
+      },
+      {
+        $unwind: '$subjectId',
+      },
+      {
+        $unwind: '$classId',
+      },
+      {
+        $lookup: {
+          from: 'timetables',
+          let: { periods: '$periods', classId: '$classId._id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$classId', '$$classId'] },
+              },
+            },
+            {
+              $project: {
+                allDays: {
+                  $objectToArray: {
+                    monday: '$monday',
+                    tuesday: '$tuesday',
+                    wednesday: '$wednesday',
+                    thursday: '$thursday',
+                    friday: '$friday',
+                    saturday: '$saturday',
+                  },
+                },
+              },
+            },
+            { $unwind: '$allDays' },
+            { $unwind: '$allDays.v' },
+            {
+              $match: {
+                $expr: { $in: ['$allDays.v._id', '$$periods'] },
+              },
+            },
+            {
+              $project: {
+                _id: '$allDays.v._id',
+                day: '$allDays.k',
+                startTime: '$allDays.v.startTime',
+                endTime: '$allDays.v.endTime',
+                subjectId: '$allDays.v.subjectId',
+                teacherId: '$allDays.v.teacherId',
+              },
+            },
+          ],
+          as: 'timetableEntries',
+        },
+      },
+      {
+        $match: {
+          $or: [
+            { 'classId.name': { $regex: search, $options: 'i' } },
+            { 'subjectId.name': { $regex: search, $options: 'i' } },
+          ],
+        },
+      },
+      {
+        $skip: skip,
+      },
+      {
+        $limit: numericLimit,
+      },
+      {
+        $project: {
+          _id: 1,
+          date: 1,
+          periods: 1,
+          'subjectId._id': 1,
+          'subjectId.name': 1,
+          'classId._id': 1,
+          'classId.name': 1,
+          timetableEntries: 1,
+          description: 1,
+        },
+      },
+    ]);
+
+    const semExams = await this.semExamModel.aggregate([
+      {
+        $match: {
+          schoolId: new Types.ObjectId(schoolId),
+        },
+      },
+      {
+        $lookup: {
+          from: 'classrooms',
+          localField: 'classId',
+          foreignField: '_id',
+          as: 'classId',
+        },
+      },
+      {
+        $unwind: '$classId',
+      },
+      {
+        $lookup: {
+          from: 'subjects',
+          localField: 'exams.subjectId',
+          foreignField: '_id',
+          as: 'subjects',
+        },
+      },
+      {
+        $match: {
+          $or: [
+            { 'classId.name': { $regex: search, $options: 'i' } },
+            { 'subjects.name': { $regex: search, $options: 'i' } },
+          ],
+        },
+      },
+      {
+        $skip: skip,
+      },
+      {
+        $limit: numericLimit,
+      },
+      {
+        $project: {
+          _id: 1,
+          exams: {
+            $map: {
+              input: '$exams',
+              as: 'exam',
+              in: {
+                subjectId: {
+                  $arrayElemAt: [
+                    '$subjects',
+                    { $indexOfArray: ['$subjects._id', '$$exam.subjectId'] },
+                  ],
+                },
+                date: '$$exam.date',
+                startTime: '$$exam.startTime',
+                endTime: '$$exam.endTime',
+                description: '$$exam.description',
+              },
+            },
+          },
+          'classId._id': 1,
+          'classId.name': 1,
+        },
+      },
+    ]);
+
+    const combinedExams = [
+      ...classTests.map((test) => ({ ...test, examType: 'Class Test' })),
+      ...semExams.map((exam) => ({
+        ...exam,
+        examType: 'Sem Exam',
+        date: exam.exams[0]?.date,
+      })),
+    ];
+
+    // Sort combined exams by date
+    combinedExams.sort(
+      (a, b) =>
+        new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
+    );
+
+    return {
+      exams: combinedExams,
+      total:
+        (await this.classTestModel.countDocuments({ schoolId })) +
+        (await this.semExamModel.countDocuments({ schoolId })),
+      page,
+      limit: numericLimit,
+    };
+  }
+
+  // New CRUD operations for SemExam
+  async getSemExam(id: string, schoolId: Types.ObjectId): Promise<any> {
+    const exam = await this.semExamModel
+      .aggregate([
+        {
+          $match: {
+            _id: new Types.ObjectId(id),
+            schoolId: new Types.ObjectId(schoolId),
+          },
+        },
+        {
+          $lookup: {
+            from: 'classrooms',
+            localField: 'classId',
+            foreignField: '_id',
+            as: 'classroom',
+          },
+        },
+
+        {
+          $unwind: '$classroom',
+        },
+        {
+          $lookup: {
+            from: 'subjects',
+            localField: 'exams.subjectId',
+            foreignField: '_id',
+            as: 'subjects',
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            classId: '$classroom._id',
+            className: '$classroom.name',
+            exams: {
+              $map: {
+                input: '$exams',
+                as: 'exam',
+                in: {
+                  _id: '$$exam._id',
+                  subjectId: '$$exam.subjectId',
+                  subjectName: {
+                    $let: {
+                      vars: {
+                        subject: {
+                          $arrayElemAt: [
+                            {
+                              $filter: {
+                                input: '$subjects',
+                                cond: {
+                                  $eq: ['$$this._id', '$$exam.subjectId'],
+                                },
+                              },
+                            },
+                            0,
+                          ],
+                        },
+                      },
+                      in: '$$subject.name',
+                    },
+                  },
+                  date: '$$exam.date',
+                  startTime: '$$exam.startTime',
+                  endTime: '$$exam.endTime',
+                  description: '$$exam.description',
+                },
+              },
+            },
+          },
+        },
+      ])
+      .exec();
+
+    if (!exam || exam.length === 0) {
+      throw new NotFoundException(`Semester exam with ID "${id}" not found`);
+    }
+
+    return exam[0];
+  }
+
+  async updateSemExam(
+    id: string,
+    updateExamDto: UpdateSemExamDto,
+    schoolId: Types.ObjectId,
+  ): Promise<SemExam> {
+    const updatedExam = await this.semExamModel
+      .findOneAndUpdate(
+        { _id: id, schoolId },
+        { $set: updateExamDto },
+        { new: true },
+      )
+      .exec();
+
+    if (!updatedExam) {
+      throw new NotFoundException(`Semester exam with ID "${id}" not found`);
+    }
+    return updatedExam;
+  }
+
+  async deleteSemExam(id: string, schoolId: Types.ObjectId): Promise<void> {
+    const result = await this.semExamModel
+      .deleteOne({ _id: id, schoolId })
+      .exec();
+    if (result.deletedCount === 0) {
+      throw new NotFoundException(`Semester exam with ID "${id}" not found`);
     }
   }
 
-  async createExamTimeTable(createExamTimeTableDto: CreateExamTimeTableDto): Promise<ExamTimeTable> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
-      
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
+  // New CRUD operations for ClassTest
+  async getClassTest(id: string, schoolId: Types.ObjectId) {
+    const classTest = await this.classTestModel
+      .aggregate([
+        { $match: { _id: new Types.ObjectId(id), schoolId } },
+        {
+          $lookup: {
+            from: 'timetables',
+            let: { periods: '$periods', classId: '$classId' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ['$classId', '$$classId'] },
+                },
+              },
+              {
+                $project: {
+                  allDays: {
+                    $objectToArray: {
+                      monday: '$monday',
+                      tuesday: '$tuesday',
+                      wednesday: '$wednesday',
+                      thursday: '$thursday',
+                      friday: '$friday',
+                      saturday: '$saturday',
+                    },
+                  },
+                },
+              },
+              { $unwind: '$allDays' },
+              { $unwind: '$allDays.v' },
+              {
+                $match: {
+                  $expr: { $in: ['$allDays.v._id', '$$periods'] },
+                },
+              },
+              {
+                $project: {
+                  _id: '$allDays.v._id',
+                  day: '$allDays.k',
+                  startTime: '$allDays.v.startTime',
+                  endTime: '$allDays.v.endTime',
+                  subjectId: '$allDays.v.subjectId',
+                  teacherId: '$allDays.v.teacherId',
+                },
+              },
+            ],
+            as: 'timetableEntries',
+          },
+        },
+        {
+          $lookup: {
+            from: 'subjects',
+            localField: 'subjectId',
+            foreignField: '_id',
+            as: 'subject',
+          },
+        },
+        {
+          $lookup: {
+            from: 'classrooms',
+            localField: 'classId',
+            foreignField: '_id',
+            as: 'classroom',
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            date: 1,
+            subjectId: 1,
+            classId: 1,
+            periods: 1,
+            schoolId: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            subject: { $arrayElemAt: ['$subject', 0] },
+            classroom: { $arrayElemAt: ['$classroom', 0] },
+            timetableEntries: 1,
+            description: 1,
+          },
+        },
+      ])
+      .exec();
 
-      const createdExamTimeTable = new this.examTimeTableModel(createExamTimeTableDto);
-      const result = await createdExamTimeTable.save({ session });
-
-      if (session) {
-        await session.commitTransaction();
-      }
-      return result;
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      throw new InternalServerErrorException('Failed to create exam time table');
-    } finally {
-      if (session) {
-        session.endSession();
-      }
+    if (!classTest || classTest.length === 0) {
+      throw new NotFoundException(`Class test with ID "${id}" not found`);
     }
+    return classTest[0];
   }
 
-  async createResult(createResultDto: CreateResultDto): Promise<Result> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
-      
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
-
-      const createdResult = new this.resultModel(createResultDto);
-      const result = await createdResult.save({ session });
-
-      if (session) {
-        await session.commitTransaction();
-      }
-      return result;
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      throw new InternalServerErrorException('Failed to create result');
-    } finally {
-      if (session) {
-        session.endSession();
-      }
+  async updateClassTest(
+    id: string,
+    updateExamDto: UpdateClassTestDto,
+    schoolId: Types.ObjectId,
+  ): Promise<ClassTest> {
+    updateExamDto.periods = updateExamDto.periods.map(
+      (x) => new Types.ObjectId(x)
+    );
+    updateExamDto.subjectId = new Types.ObjectId(updateExamDto.subjectId)
+    if (updateExamDto.classId) {
+      delete updateExamDto.classId;
     }
+    const updatedClassTest = await this.classTestModel
+      .findOneAndUpdate(
+        { _id: id, schoolId },
+        { $set: updateExamDto },
+        { new: true },
+      )
+      .exec();
+
+    if (!updatedClassTest) {
+      throw new NotFoundException(`Class test with ID "${id}" not found`);
+    }
+    return updatedClassTest;
   }
 
-  async findAll(): Promise<Exam[]> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
-      
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
-
-      const exams = await this.examModel.find().session(session).exec();
-
-      if (session) {
-        await session.commitTransaction();
-      }
-      return exams;
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      throw new InternalServerErrorException('Failed to fetch exams');
-    } finally {
-      if (session) {
-        session.endSession();
-      }
-    }
-  }
-
-  async findOne(id: string): Promise<Exam> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
-      
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
-
-      const exam = await this.examModel.findById(id).session(session).exec();
-      if (!exam) {
-        throw new NotFoundException(`Exam with ID ${id} not found`);
-      }
-
-      if (session) {
-        await session.commitTransaction();
-      }
-      return exam;
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new InternalServerErrorException('Failed to fetch exam');
-    } finally {
-      if (session) {
-        session.endSession();
-      }
-    }
-  }
-
-  async update(id: string, updateExamDto: UpdateExamDto): Promise<Exam> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
-      
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
-
-      const updatedExam = await this.examModel.findByIdAndUpdate(id, updateExamDto, { new: true, session }).exec();
-      if (!updatedExam) {
-        throw new NotFoundException(`Exam with ID ${id} not found`);
-      }
-
-      if (session) {
-        await session.commitTransaction();
-      }
-      return updatedExam;
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new InternalServerErrorException('Failed to update exam');
-    } finally {
-      if (session) {
-        session.endSession();
-      }
-    }
-  }
-
-  async remove(id: string): Promise<void> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
-      
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
-
-    const result = await this.examModel.findByIdAndDelete(id).exec();
-    if (!result) {
-      throw new NotFoundException(`Exam with ID ${id} not found`);
-      }
-
-      if (session) {
-        await session.commitTransaction();
-      }
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new InternalServerErrorException('Failed to delete exam');
+  async deleteClassTest(id: string, schoolId: Types.ObjectId): Promise<void> {
+    const result = await this.classTestModel
+      .deleteOne({ _id: id, schoolId })
+      .exec();
+    if (result.deletedCount === 0) {
+      throw new NotFoundException(`Class test with ID "${id}" not found`);
     }
   }
 }

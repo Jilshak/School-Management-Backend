@@ -6,6 +6,7 @@ import { Account, AccountSchema } from 'src/domains/schema/account.schema';
 import { GuardsModule } from '../guards/guards.module';
 import { FeeType, FeeTypeSchema } from 'src/domains/schema/feeType.schema';
 import { PaymentDue, PaymentDueSchema } from 'src/domains/schema/paymentdue.schema';
+import { FeeStructure, FeeStructureSchema } from 'src/domains/schema/fee-structure.schema';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { PaymentDue, PaymentDueSchema } from 'src/domains/schema/paymentdue.sche
       { name: Account.name, schema: AccountSchema },
       { name: FeeType.name, schema: FeeTypeSchema },
       { name: PaymentDue.name, schema: PaymentDueSchema },
+      { name: FeeStructure.name, schema: FeeStructureSchema },
     ]),
     GuardsModule,
   ],

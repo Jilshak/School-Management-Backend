@@ -301,6 +301,14 @@ export class UserService {
           },
         },
         {
+          $lookup: {
+            from: 'classrooms',
+            localField: 'classId',
+            foreignField: '_id',
+            as: 'classDetails',
+          },
+        },
+        {
           $addFields: {
             firstName: '$additionalDetails.firstName',
             lastName: '$additionalDetails.lastName',

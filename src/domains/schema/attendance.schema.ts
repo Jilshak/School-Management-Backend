@@ -18,13 +18,16 @@ class StudentAttendance {
   status: AttendanceStatus;
 }
 
-@Schema()
+@Schema({timestamps:true})
 export class Attendance {
   @Prop({ required: true })
   attendanceDate: Date;
 
   @Prop({ type: Types.ObjectId, ref: 'Classroom', required: true })
   classId: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'School', required: true })
+  schoolId: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'Teacher', required: true })
   teacherId: Types.ObjectId;

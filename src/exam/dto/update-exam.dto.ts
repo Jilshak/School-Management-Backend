@@ -1,4 +1,5 @@
 import { PartialType } from '@nestjs/swagger';
-import { CreateExamDto } from './create-exam.dto';
+import { CreateSemExamDto, CreateClassTest } from './create-exam.dto';
 
-export class UpdateExamDto extends PartialType(CreateExamDto) {}
+export class UpdateSemExamDto extends PartialType(CreateSemExamDto) {}
+export class UpdateClassTestDto extends PartialType(CreateClassTest) {}

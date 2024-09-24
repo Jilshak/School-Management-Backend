@@ -108,6 +108,7 @@ export class ClassroomService {
 
   async findAll(
     schoolId: Types.ObjectId,
+    isActive:boolean = true,
     search?: string,
     full?: boolean,
     page: number = 1,
@@ -116,14 +117,13 @@ export class ClassroomService {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
       let aggregationPipeline: any[] = [
-        { $match: { schoolId: new Types.ObjectId(schoolId), isActive: true } },
+        { $match: { schoolId: new Types.ObjectId(schoolId), isActive } },
         {
           $lookup: {
             from: 'users',
@@ -170,7 +170,7 @@ export class ClassroomService {
               $filter: {
                 input: '$students',
                 as: 'student',
-                cond: { $eq: ['$$student.isActive', true] }
+                cond: { $eq: ['$$student.isActive', isActive] }
               }
             }
           }
@@ -231,6 +231,171 @@ export class ClassroomService {
             },
           },
           studentCount: 1,
+        },
+      });
+
+      const countPipeline = [...aggregationPipeline, { $count: 'totalCount' }];
+      const [countResult] = await this.classroomModel
+        .aggregate(countPipeline)
+        .session(session);
+      const totalCount = countResult ? countResult.totalCount : 0;
+
+      if (!full) {
+        const skip = (page - 1) * limit;
+        aggregationPipeline.push({ $skip: skip }, { $limit: limit });
+      }
+
+      const classrooms = await this.classroomModel
+        .aggregate(aggregationPipeline)
+        .session(session);
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return { classrooms, totalCount };
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      throw new InternalServerErrorException('Failed to fetch classrooms');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async findAllWithStudents(
+    schoolId: Types.ObjectId,
+    isActive: boolean = true,
+    search?: string,
+    full?: boolean,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{ classrooms: Classroom[]; totalCount: number }> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      let aggregationPipeline: any[] = [
+        { $match: { schoolId: new Types.ObjectId(schoolId), isActive } },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'classTeacherId',
+            foreignField: '_id',
+            as: 'userDetails',
+          },
+        },
+        {
+          $lookup: {
+            from: 'staffs',
+            localField: 'classTeacherId',
+            foreignField: 'userId',
+            as: 'staffDetails',
+          },
+        },
+        {
+          $lookup: {
+            from: 'teachers',
+            localField: 'classTeacherId',
+            foreignField: 'userId',
+            as: 'teacherDetails',
+          },
+        },
+        {
+          $lookup: {
+            from: 'subjects',
+            localField: 'subjects',
+            foreignField: '_id',
+            as: 'subjectDetails',
+          },
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: '_id',
+            foreignField: 'classId',
+            as: 'students',
+          },
+        },
+        {
+          $lookup: {
+            from: 'students',
+            localField: 'students._id',
+            foreignField: 'userId',
+            as: 'studentDetails',
+          },
+        },
+      ];
+
+      if (search) {
+        aggregationPipeline.push({
+          $match: {
+            $or: [
+              { name: { $regex: search, $options: 'i' } },
+              { 'staffDetails.firstName': { $regex: search, $options: 'i' } },
+              { 'staffDetails.lastName': { $regex: search, $options: 'i' } },
+              { 'staffDetails.email': { $regex: search, $options: 'i' } },
+            ],
+          },
+        });
+      }
+
+      aggregationPipeline.push({
+        $project: {
+          _id: 1,
+          name: 1,
+          academicYear: 1,
+          classTeacherDetails: {
+            $cond: {
+              if: { $gt: [{ $size: '$staffDetails' }, 0] },
+              then: {
+                name: {
+                  $concat: [
+                    { $arrayElemAt: ['$staffDetails.firstName', 0] },
+                    ' ',
+                    { $arrayElemAt: ['$staffDetails.lastName', 0] },
+                  ],
+                },
+                email: { $arrayElemAt: ['$staffDetails.email', 0] },
+                phoneNumber: { $arrayElemAt: ['$staffDetails.contactNumber', 0] },
+                _id: { $arrayElemAt: ['$staffDetails._id', 0] },
+              },
+              else: null,
+            },
+          },
+          subjects: {
+            $map: {
+              input: '$subjectDetails',
+              as: 'subject',
+              in: {
+                _id: '$$subject._id',
+                name: '$$subject.name',
+                code: '$$subject.code',
+              },
+            },
+          },
+          students: {
+            $map: {
+              input: '$studentDetails',
+              as: 'student',
+              in: {
+                _id: '$$student.userId',
+                name: { $concat: ['$$student.firstName', ' ', '$$student.lastName'] },
+                email: '$$student.email',
+                enrollmentNumber: '$$student.enrollmentNumber',
+                gender: '$$student.gender',
+                guardianName: '$$student.parentsDetails.guardianName',
+                contactNumber: '$$student.contactNumber',
+              },
+            },
+          },
+          studentCount: { $size: '$students' },
         },
       });
 
@@ -492,7 +657,7 @@ export class ClassroomService {
 
       // Check if there are any students in this classroom
       const studentsInClassroom = await this.studentModel
-        .find({ classId: new Types.ObjectId(id) })
+        .find({ classId: new Types.ObjectId(id),isActive:true })
         .session(session)
         .exec();
 
@@ -515,7 +680,7 @@ export class ClassroomService {
       const result = await this.classroomModel
         .findOneAndUpdate(
           { _id: new Types.ObjectId(id), schoolId },
-          { $set: { isActive: false, classTeacherId: undefined } },
+          { $set: { isActive: false },$unset:{classTeacherId:true} },
         )
         .session(session)
         .exec();

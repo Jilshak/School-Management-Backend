@@ -1,13 +1,12 @@
 import {
   IsEmail,
-  IsString,
   IsEnum,
   IsDate,
   IsOptional,
   IsMongoId,
   ValidateNested,
   IsBoolean,
-  IsPhoneNumber,
+  IsString,
   IsArray,
   IsNumber,
   IsNotEmpty,
@@ -43,7 +42,7 @@ class ParentsDetailsDto {
   guardianName: string;
 
   @ApiProperty({ example: '+1234567890' })
-  @IsPhoneNumber()
+  @IsString()
   guardianContactNumber: string;
 
   @ApiProperty({ example: 'Father' })
@@ -140,12 +139,8 @@ export class CreateUserDto {
   @IsEmail()
   email: string;
 
-  @ApiProperty({ example: 'password123' })
-  @IsString()
-  password: string;
-
   @ApiProperty({ enum: UserRole, example: [UserRole.ADMISSION_TEAM,UserRole.ACCOUNTANT,UserRole.TEACHER],type:[String] })
-  @IsEnum(UserRole)
+  @IsArray()
   roles: UserRole[];
 
   @ApiProperty({ example: 'John' })
@@ -170,7 +165,7 @@ export class CreateUserDto {
   nationality: string;
 
   @ApiProperty({ example: '+1234567890' })
-  @IsPhoneNumber()
+  @IsString()
   contactNumber: string;
 
   @ApiProperty({ example: '123 Main St, Anytown, AN 12345' })
@@ -212,10 +207,11 @@ export class CreateUserDto {
   emergencyContactName: string;
 
   @ApiProperty({ example: '+1122334455' })
-  @IsPhoneNumber()
+  @IsString()
   emergencyContactNumber: string;
 
   @ApiProperty({ example: '507f1f77bcf86cd799439012' })
+  @IsOptional()
   @IsMongoId()
   schoolId: ObjectId;
 

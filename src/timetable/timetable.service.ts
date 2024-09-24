@@ -50,7 +50,7 @@ export class TimetableService {
         createTimetableDto,
         schoolId,
       );
-      await this.checkTeacherConflicts(modifiedDto, schoolId, session);
+      await this.checkTeacherConflicts(modifiedDto, schoolId,new Types.ObjectId(createTimetableDto.classId) ,session);
 
       // Filter out days with empty schedules
       const filteredDto = this.filterEmptyDays(modifiedDto);
@@ -118,6 +118,7 @@ export class TimetableService {
   private async checkTeacherConflicts(
     dto: any,
     schoolId: Types.ObjectId,
+    classId: Types.ObjectId,
     session: any,
   ) {
     try {
@@ -134,6 +135,7 @@ export class TimetableService {
           const conflict = await this.timetableModel
             .findOne({
               schoolId,
+              classId: { $ne: classId },
               [day]: {
                 $elemMatch: {
                   teacherId: slot.teacherId,
@@ -156,7 +158,7 @@ export class TimetableService {
     }
   }
 
-  async findAvailableTeacher(startTime: number, endTime: number, subjectId: string, schoolId: Types.ObjectId): Promise<User[]> {
+  async findAvailableTeacher(startTime: number, endTime: number, subjectId: string, schoolId: Types.ObjectId, classId: string): Promise<User[]> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -218,6 +220,7 @@ export class TimetableService {
       // Find all timetables that have slots conflicting with the given time
       const conflictingTimetables = await this.timetableModel.find({
         schoolId: schoolId,
+        classId: { $ne: new Types.ObjectId(classId) },
         $or: [
           { monday: { $elemMatch: { $or: [
             { startTime: { $lt: endTime }, endTime: { $gt: startTime } },
@@ -271,6 +274,7 @@ export class TimetableService {
       }
       return availableTeachers;
     } catch (error) {
+      console.log(error)
       if (session) {
         await session.abortTransaction();
       }
@@ -386,114 +390,101 @@ export class TimetableService {
   }
 
   async findOne(id: string, schoolId: Types.ObjectId): Promise<any> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
+  let session = null;
+  try {
+    const supportsTransactions = await this.supportsTransactions();
 
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
+    if (supportsTransactions) {
+      session = await this.connection.startSession();
+      session.startTransaction();
+    }
 
-      const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-      const aggregationPipeline: any = [
-        { $match: { classId: new Types.ObjectId(id), schoolId: schoolId } },
+    const aggregationPipeline: any = [
+      { $match: { classId: new Types.ObjectId(id), schoolId: schoolId } },
+      {
+        $lookup: {
+          from: 'classrooms',
+          localField: 'classId',
+          foreignField: '_id',
+          as: 'classroomDetails'
+        }
+      },
+      { $unwind: '$classroomDetails' },
+      // Perform lookups for each day in a consistent manner
+      ...days.flatMap(day => [
+        // Lookup teacher details from the 'users' collection
         {
           $lookup: {
-            from: 'classrooms',
-            localField: 'classId',
+            from: 'users',
+            localField: `${day}.teacherId`,
             foreignField: '_id',
-            as: 'classroomDetails'
+            as: `${day}Teachers`
           }
         },
-        { $unwind: '$classroomDetails' },
-        // Lookup stages for teachers and subjects for each day
-        ...days.flatMap(day => [
-          {
-            $lookup: {
-              from: 'users',
-              localField: `${day}.teacherId`,
-              foreignField: '_id',
-              as: `${day}Teachers`
-            }
-          },
-          {
-            $lookup: {
-              from: 'staffs',
-              localField: `${day}.teacherId`,
-              foreignField: 'userId',
-              as: `${day}TeacherDetails`
-            }
-          },
-          {
-            $lookup: {
-              from: 'subjects',
-              localField: `${day}.subjectId`,
-              foreignField: '_id',
-              as: `${day}Subjects`
-            }
-          }
-        ]),
+        // Lookup additional teacher details from the 'staffs' collection
         {
-          $project: {
-            classId: 1,
-            classroomDetails: 1,
-            // Project stages for each day
-            ...Object.fromEntries(days.map(day => [
-              day,
-              {
-                $map: {
-                  input: `$${day}`,
-                  as: 'slot',
-                  in: {
-                    $mergeObjects: [
-                      '$$slot',
-                      {
-                        teacher: {
-                          $mergeObjects: [
-                            { $arrayElemAt: [`$${day}Teachers`, { $indexOfArray: [`$${day}.teacherId`, '$$slot.teacherId'] }] },
-                            {
-                              firstName: { $arrayElemAt: [`$${day}TeacherDetails.firstName`, { $indexOfArray: [`$${day}.teacherId`, '$$slot.teacherId'] }] },
-                              lastName: { $arrayElemAt: [`$${day}TeacherDetails.lastName`, { $indexOfArray: [`$${day}.teacherId`, '$$slot.teacherId'] }] }
-                            }
-                          ]
-                        },
-                        subject: { $arrayElemAt: [`$${day}Subjects`, { $indexOfArray: [`$${day}.subjectId`, '$$slot.subjectId'] }] }
-                      }
-                    ]
-                  }
-                }
-              }
-            ]))
+          $lookup: {
+            from: 'staffs',
+            localField: `${day}.teacherId`,
+            foreignField: 'userId',
+            as: `${day}TeacherDetails`
+          }
+        },
+        // Lookup subjects
+        {
+          $lookup: {
+            from: 'subjects',
+            localField: `${day}.subjectId`,
+            foreignField: '_id',
+            as: `${day}Subjects`
           }
         }
-      ];
+      ])
+    ];
 
-      const [timetable] = await this.timetableModel.aggregate(aggregationPipeline).session(session);
+    const [timetable] = await this.timetableModel.aggregate(aggregationPipeline).session(session);
+    const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-      if (!timetable) {
-        throw new NotFoundException(`Timetable for class with ID ${id} not found`);
-      }
+    daysOfWeek.forEach(day => {
+      if (timetable[day] && timetable[day].length > 0) {
+        timetable[day] = timetable[day].map(period => {
+          const teacherIndex = timetable[`${day}Teachers`].findIndex(teacher => teacher._id.buffer.toString() === period.teacherId.buffer.toString());
+          const teacherDetailsIndex = timetable[`${day}TeacherDetails`].findIndex(detail => detail.userId.buffer.toString() === period.teacherId.buffer.toString());
+          const subjectIndex = timetable[`${day}Subjects`].findIndex(subject => subject._id.buffer.toString() === period.subjectId.buffer.toString());
 
-      if (session) {
-        await session.commitTransaction();
+          return {
+            ...period,
+            teacher: timetable[`${day}TeacherDetails`][teacherDetailsIndex],
+            subject: timetable[`${day}Subjects`][subjectIndex]
+          };
+        });
       }
-      return timetable;
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new InternalServerErrorException('Failed to fetch timetable');
-    } finally {
-      if (session) {
-        session.endSession();
-      }
+    });
+    if (!timetable) {
+      throw new NotFoundException(`Timetable for class with ID ${id} not found`);
+    }
+
+    if (session) {
+      await session.commitTransaction();
+    }
+    return timetable;
+  } catch (error) {
+    if (session) {
+      await session.abortTransaction();
+    }
+    if (error instanceof NotFoundException) {
+      throw error;
+    }
+    throw new InternalServerErrorException('Failed to fetch timetable');
+  } finally {
+    if (session) {
+      session.endSession();
     }
   }
+}
+
 
   async update(
     id: string,

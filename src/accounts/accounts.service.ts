@@ -6,6 +6,9 @@ import { CreateAccountDto, CreatePaymentDueDto } from './dto/create-account.dto'
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { FeeType } from 'src/domains/schema/feeType.schema';
 import { PaymentDue } from 'src/domains/schema/paymentdue.schema';
+import { FeeStructure } from 'src/domains/schema/fee-structure.schema';
+import { CreateFeeStructureDto } from './dto/create-fee-structure.dto';
+import { UpdateFeeStructureDto } from './dto/update-fee-structure.dto';
 
 @Injectable()
 export class AccountsService {
@@ -13,6 +16,7 @@ export class AccountsService {
     @InjectModel(Account.name) private accountModel: Model<Account>,
     @InjectModel(FeeType.name) private feeModel: Model<FeeType>,
     @InjectModel(PaymentDue.name) private paymentDueModel: Model<PaymentDue>,
+    @InjectModel(FeeStructure.name) private feeStructureModel: Model<FeeStructure>,
     @InjectConnection() private connection: Connection
   ) {}
 
@@ -343,6 +347,190 @@ export class AccountsService {
         throw error;
       }
       throw new InternalServerErrorException('Failed to delete fee type');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async createFeeStructure(createFeeStructureDto: CreateFeeStructureDto, schoolId: Types.ObjectId, userId: Types.ObjectId): Promise<FeeStructure> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      // Convert fee type IDs to ObjectId
+      const selectedFeeTypes = createFeeStructureDto.selectedFeeTypes.map(feeType => ({
+        ...feeType,
+        _id: new Types.ObjectId(feeType._id)
+      }));
+
+      const feeStructure = new this.feeStructureModel({
+        ...createFeeStructureDto,
+        selectedFeeTypes,
+        schoolId,
+        createdBy: userId,
+        updatedBy: userId
+      });
+      const result = await feeStructure.save({ session });
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return result;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      throw new InternalServerErrorException('Failed to create fee structure');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async getFeeStructures(schoolId: Types.ObjectId): Promise<FeeStructure[]> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const feeStructures = await this.feeStructureModel.find({ schoolId }).session(session).exec();
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return feeStructures;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      throw new InternalServerErrorException('Failed to fetch fee structures');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async getFeeStructureById(id: string, schoolId: Types.ObjectId): Promise<FeeStructure> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const feeStructure = await this.feeStructureModel.findOne({ _id: new Types.ObjectId(id), schoolId }).session(session).exec();
+      if (!feeStructure) {
+        throw new NotFoundException(`Fee Structure with ID ${id} not found`);
+      }
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return feeStructure;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to fetch fee structure');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async updateFeeStructure(id: string, updateFeeStructureDto: UpdateFeeStructureDto, schoolId: Types.ObjectId, userId: Types.ObjectId): Promise<FeeStructure> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      // Convert fee type IDs to ObjectId if present in the update DTO
+      let updatedDto = { ...updateFeeStructureDto };
+      if (updateFeeStructureDto.selectedFeeTypes) {
+        updatedDto.selectedFeeTypes = updateFeeStructureDto.selectedFeeTypes.map(feeType => ({
+          ...feeType,
+          _id: new Types.ObjectId(feeType._id)
+        }));
+      }
+
+      const updatedFeeStructure = await this.feeStructureModel.findOneAndUpdate(
+        { _id: new Types.ObjectId(id), schoolId },
+        { ...updatedDto, updatedBy: userId },
+        { new: true, session }
+      ).exec();
+
+      if (!updatedFeeStructure) {
+        throw new NotFoundException(`Fee Structure with ID ${id} not found`);
+      }
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return updatedFeeStructure;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to update fee structure');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async deleteFeeStructure(id: string, schoolId: Types.ObjectId, userId: Types.ObjectId): Promise<void> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const result = await this.feeStructureModel.findOneAndDelete({ _id: new Types.ObjectId(id), schoolId }).session(session).exec();
+      if (!result) {
+        throw new NotFoundException(`Fee Structure with ID ${id} not found`);
+      }
+
+      if (session) {
+        await session.commitTransaction();
+      }
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to delete fee structure');
     } finally {
       if (session) {
         session.endSession();

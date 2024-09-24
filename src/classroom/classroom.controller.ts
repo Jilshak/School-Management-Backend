@@ -36,18 +36,42 @@ export class ClassroomController {
   @Roles('admin', 'teacher',UserRole.ADMISSION_TEAM,UserRole.HR)
   @ApiOperation({ summary: 'Get all classrooms' })
   @ApiResponse({ status: 200, description: 'Return all classrooms.' })
+  @ApiQuery({ name: 'isActive', required: false, type: Boolean, description: 'to get active and inactive classes' })
   @ApiQuery({ name: 'search', required: false, description: 'search by class Name and academic year' })
   @ApiQuery({ name: 'full', required: false, description: 'If pagination not required give this true' })
   @ApiQuery({ name: 'page', required: false, description: 'Page number for pagination' })
   @ApiQuery({ name: 'limit', required: false, description: 'Number of items per page' })
   async findAll(
     @LoginUser("schoolId") schoolId: Types.ObjectId,
+    @Query('isActive') isActive?: string,
     @Query('search') search?: string,
     @Query('full') full?: boolean,
     @Query('page') page?: number,
     @Query('limit') limit?: number
   ) {
-    return this.classroomService.findAll(schoolId, search, full, page, limit);
+    const isActiveBoolean = isActive ? isActive.toLowerCase() === 'true' : undefined;
+    return this.classroomService.findAll(schoolId, isActiveBoolean, search, full, page, limit);
+  }
+
+  @Get("/with-students")
+  @Roles('admin', 'teacher',UserRole.ADMISSION_TEAM,UserRole.HR)
+  @ApiOperation({ summary: 'Get all classrooms' })
+  @ApiResponse({ status: 200, description: 'Return all classrooms.' })
+  @ApiQuery({ name: 'isActive', required: false, type: Boolean, description: 'to get active and inactive classes' })
+  @ApiQuery({ name: 'search', required: false, description: 'search by class Name and academic year' })
+  @ApiQuery({ name: 'full', required: false, description: 'If pagination not required give this true' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number for pagination' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Number of items per page' })
+  async findAllWithStudents(
+    @LoginUser("schoolId") schoolId: Types.ObjectId,
+    @Query('isActive') isActive?: string,
+    @Query('search') search?: string,
+    @Query('full') full?: boolean,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number
+  ) {
+    const isActiveBoolean = isActive ? isActive.toLowerCase() === 'true' : undefined;
+    return this.classroomService.findAllWithStudents(schoolId, isActiveBoolean, search, full, page, limit);
   }
 
   @Get("/get-teachers-not-classTeacher")

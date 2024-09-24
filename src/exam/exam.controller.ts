@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, ValidationPipe, Query } from '@nestjs/common';
 import { ExamService } from './exam.service';
-import { CreateExamDto } from './dto/create-exam.dto';
-import { UpdateExamDto } from './dto/update-exam.dto';
+import { CreateClassTest, CreateSemExamDto } from './dto/create-exam.dto';
+import { UpdateSemExamDto, UpdateClassTestDto } from './dto/update-exam.dto';
 import { CreateOnlineExamDto } from './dto/create-online-exam.dto';
 import { CreateOfflineExamDto } from './dto/create-offline-exam.dto';
 import { CreateExamTimeTableDto } from './dto/create-exam-time-table.dto';
@@ -9,7 +9,9 @@ import { CreateResultDto } from './dto/create-result.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../shared/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
+import { Types } from 'mongoose';
 
 @ApiTags('exams')
 @ApiBearerAuth()
@@ -18,93 +20,93 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth } 
 export class ExamController {
   constructor(private readonly examService: ExamService) {}
 
-  @Post()
+  // Existing methods
+  @Post("/sem-exam")
   @Roles('admin', 'teacher')
   @ApiOperation({ summary: 'Create a new exam' })
   @ApiResponse({ status: 201, description: 'The exam has been successfully created.' })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
-  @ApiBody({ type: CreateExamDto })
-  create(@Body() createExamDto: CreateExamDto) {
-    return this.examService.create(createExamDto);
+  @ApiBody({ type: CreateSemExamDto })
+  createSemExam(@Body(ValidationPipe) createExamDto: CreateSemExamDto,@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    return this.examService.createSemExam(createExamDto,schoolId);
   }
 
-  @Post('online')
+  @Post("/class-test")
   @Roles('admin', 'teacher')
-  @ApiOperation({ summary: 'Create a new online exam' })
-  @ApiResponse({ status: 201, description: 'The online exam has been successfully created.' })
+  @ApiOperation({ summary: 'Create a new exam' })
+  @ApiResponse({ status: 201, description: 'The exam has been successfully created.' })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
-  @ApiBody({ type: CreateOnlineExamDto })
-  createOnlineExam(@Body() createOnlineExamDto: CreateOnlineExamDto) {
-    return this.examService.createOnlineExam(createOnlineExamDto);
+  @ApiBody({ type: CreateClassTest })
+  createClassTest(@Body(ValidationPipe) createExamDto: CreateClassTest,@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    return this.examService.createClassTest(createExamDto,schoolId);
   }
 
-  @Post('offline')
+  @Get("offline-exam")
   @Roles('admin', 'teacher')
-  @ApiOperation({ summary: 'Create a new offline exam' })
-  @ApiResponse({ status: 201, description: 'The offline exam has been successfully created.' })
+  @ApiOperation({ summary: 'Get all offline exams' })
+  @ApiResponse({ status: 200, description: 'Returns all offline exams.' })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
-  @ApiBody({ type: CreateOfflineExamDto })
-  createOfflineExam(@Body() createOfflineExamDto: CreateOfflineExamDto) {
-    return this.examService.createOfflineExam(createOfflineExamDto);
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  findAllOfflineExam(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('search') search: string = '',
+    @LoginUser("schoolId") schoolId: Types.ObjectId
+  ) {
+    return this.examService.findAllOfflineExams(Number(page), Number(limit), search, schoolId);
   }
 
-  @Post('timetable')
+  // New CRUD operations for SemExam
+  @Get("/sem-exam/:id")
   @Roles('admin', 'teacher')
-  @ApiOperation({ summary: 'Create a new exam timetable' })
-  @ApiResponse({ status: 201, description: 'The exam timetable has been successfully created.' })
-  @ApiResponse({ status: 400, description: 'Bad Request.' })
-  @ApiBody({ type: CreateExamTimeTableDto })
-  createExamTimeTable(@Body() createExamTimeTableDto: CreateExamTimeTableDto) {
-    return this.examService.createExamTimeTable(createExamTimeTableDto);
+  @ApiOperation({ summary: 'Get a semester exam by id' })
+  @ApiParam({ name: 'id', type: 'string' })
+  getSemExam(@Param('id') id: string, @LoginUser("schoolId") schoolId: Types.ObjectId) {
+    return this.examService.getSemExam(id, schoolId);
   }
 
-  @Post('result')
+  @Put("/sem-exam/:id")
   @Roles('admin', 'teacher')
-  @ApiOperation({ summary: 'Create a new exam result' })
-  @ApiResponse({ status: 201, description: 'The exam result has been successfully created.' })
-  @ApiResponse({ status: 400, description: 'Bad Request.' })
-  @ApiBody({ type: CreateResultDto })
-  createResult(@Body() createResultDto: CreateResultDto) {
-    return this.examService.createResult(createResultDto);
+  @ApiOperation({ summary: 'Update a semester exam' })
+  @ApiParam({ name: 'id', type: 'string' })
+  @ApiBody({ type: UpdateSemExamDto })
+  updateSemExam(@Param('id') id: string, @Body() updateExamDto: UpdateSemExamDto, @LoginUser("schoolId") schoolId: Types.ObjectId) {
+    return this.examService.updateSemExam(id, updateExamDto, schoolId);
   }
 
-  @Get()
-  @Roles('admin', 'teacher', 'student')
-  @ApiOperation({ summary: 'Get all exams' })
-  @ApiResponse({ status: 200, description: 'Return all exams.' })
-  findAll() {
-    return this.examService.findAll();
-  }
-
-  @Get(':id')
-  @Roles('admin', 'teacher', 'student')
-  @ApiOperation({ summary: 'Get an exam by id' })
-  @ApiResponse({ status: 200, description: 'Return the exam.' })
-  @ApiResponse({ status: 404, description: 'Exam not found.' })
-  @ApiParam({ name: 'id', required: true, description: 'Exam ID' })
-  findOne(@Param('id') id: string) {
-    return this.examService.findOne(id);
-  }
-
-  @Put(':id')
+  @Delete("/sem-exam/:id")
   @Roles('admin', 'teacher')
-  @ApiOperation({ summary: 'Update an exam' })
-  @ApiResponse({ status: 200, description: 'The exam has been successfully updated.' })
-  @ApiResponse({ status: 400, description: 'Bad Request.' })
-  @ApiResponse({ status: 404, description: 'Exam not found.' })
-  @ApiParam({ name: 'id', required: true, description: 'Exam ID' })
-  @ApiBody({ type: UpdateExamDto })
-  update(@Param('id') id: string, @Body() updateExamDto: UpdateExamDto) {
-    return this.examService.update(id, updateExamDto);
+  @ApiOperation({ summary: 'Delete a semester exam' })
+  @ApiParam({ name: 'id', type: 'string' })
+  deleteSemExam(@Param('id') id: string, @LoginUser("schoolId") schoolId: Types.ObjectId) {
+    return this.examService.deleteSemExam(id, schoolId);
   }
 
-  @Delete(':id')
-  @Roles('admin')
-  @ApiOperation({ summary: 'Delete an exam' })
-  @ApiResponse({ status: 200, description: 'The exam has been successfully deleted.' })
-  @ApiResponse({ status: 404, description: 'Exam not found.' })
-  @ApiParam({ name: 'id', required: true, description: 'Exam ID' })
-  remove(@Param('id') id: string) {
-    return this.examService.remove(id);
+  // New CRUD operations for ClassTest
+  @Get("/class-test/:id")
+  @Roles('admin', 'teacher')
+  @ApiOperation({ summary: 'Get a class test by id' })
+  @ApiParam({ name: 'id', type: 'string' })
+  getClassTest(@Param('id') id: string, @LoginUser("schoolId") schoolId: Types.ObjectId) {
+    return this.examService.getClassTest(id, schoolId);
+  }
+
+  @Put("/class-test/:id")
+  @Roles('admin', 'teacher')
+  @ApiOperation({ summary: 'Update a class test' })
+  @ApiParam({ name: 'id', type: 'string' })
+  @ApiBody({ type: UpdateClassTestDto })
+  updateClassTest(@Param('id') id: string, @Body() updateExamDto: UpdateClassTestDto, @LoginUser("schoolId") schoolId: Types.ObjectId) {
+    return this.examService.updateClassTest(id, updateExamDto, schoolId);
+  }
+
+  @Delete("/class-test/:id")
+  @Roles('admin', 'teacher')
+  @ApiOperation({ summary: 'Delete a class test' })
+  @ApiParam({ name: 'id', type: 'string' })
+  deleteClassTest(@Param('id') id: string, @LoginUser("schoolId") schoolId: Types.ObjectId) {
+    return this.examService.deleteClassTest(id, schoolId);
   }
 }

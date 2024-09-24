@@ -6,6 +6,9 @@ import { Exam, ExamSchema } from '../domains/schema/exam.schema';
 import { ExamTimeTable, ExamTimeTableSchema } from '../domains/schema/exam-time-table.schema';
 import { Result, ResultSchema } from '../domains/schema/result.schema';
 import { GuardsModule } from '../guards/guards.module';
+import { SemExam, SemExamSchema } from '../domains/schema/sem-exam.schema';
+import { ClassTest, ClassTestSchema } from 'src/domains/schema/class-test.schema';
+import { TimeTable, TimeTableSchema } from 'src/domains/schema/timetable.schema';
 
 @Module({
   imports: [
@@ -13,6 +16,9 @@ import { GuardsModule } from '../guards/guards.module';
       { name: Exam.name, schema: ExamSchema },
       { name: ExamTimeTable.name, schema: ExamTimeTableSchema },
       { name: Result.name, schema: ResultSchema },
+      { name: SemExam.name, schema: SemExamSchema },
+      { name: TimeTable.name, schema: TimeTableSchema },
+      { name: ClassTest.name, schema: ClassTestSchema },
     ]),
     GuardsModule,
   ],

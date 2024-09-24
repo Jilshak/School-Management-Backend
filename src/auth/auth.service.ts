@@ -27,7 +27,7 @@ export class AuthService {
 
   async validateUser(username: string, password: string): Promise<any> {
     const user = await this.userModel.findOne({ username });
-    if (user && await bcrypt.compare(password, user.password)) {
+    if (user && await bcrypt.compare(password, user.password)&&user.isActive) {
       const { password, ...result } = user.toObject();
       if(user.roles.includes(UserRole.TEACHER)){
         const classTeacherOf =await this.classroomModel.findOne({classTeacherId:user._id})

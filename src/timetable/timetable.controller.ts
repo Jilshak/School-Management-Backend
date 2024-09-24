@@ -36,13 +36,15 @@ export class TimetableController {
   @ApiQuery({ name: 'startTime', required: true, type: Number })
   @ApiQuery({ name: 'endTime', required: true, type: Number })
   @ApiQuery({ name: 'subjectId', required: true, type: String })
+  @ApiQuery({ name: 'classId', required: true, type: String })
   findStaffAvailable(
     @Query('startTime') startTime: number,
     @Query('endTime') endTime: number,
     @Query('subjectId') subjectId: string,
+    @Query('classId') classId: string,
     @LoginUser('schoolId') schoolId: Types.ObjectId
   ) {
-    return this.timetableService.findAvailableTeacher(startTime, endTime, subjectId, schoolId);
+    return this.timetableService.findAvailableTeacher(startTime, endTime, subjectId, schoolId,classId);
   }
 
   @Get()

@@ -5,7 +5,7 @@ export type StaffDocument = Staff & Document;
 
 @Schema()
 export class Staff {
-  @Prop({ required: true,unique:true })
+  @Prop({ required: true })
   email: string;
 
   @Prop({ required: true })

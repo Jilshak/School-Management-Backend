@@ -11,6 +11,9 @@ import { FeeType } from '../domains/schema/feeType.schema';
 import { CreateFeeTypeDto } from './dto/create-fee-type.dto';
 import { UpdateFeeTypeDto } from './dto/update-fee-type.dto';
 import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
+import { FeeStructure } from '../domains/schema/fee-structure.schema';
+import { CreateFeeStructureDto } from './dto/create-fee-structure.dto';
+import { UpdateFeeStructureDto } from './dto/update-fee-structure.dto';
 
 @ApiTags('accounts')
 @ApiBearerAuth()
@@ -81,5 +84,68 @@ export class AccountsController {
   async deleteFeeType(@Param('id') id: string, @LoginUser('schoolId') schoolId: Types.ObjectId) {
     await this.accountsService.deleteFeeType(id, new Types.ObjectId(schoolId));
     return { message: 'Fee type deleted successfully' };
+  }
+
+  @Post('fee-structures')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Create a new fee structure' })
+  @ApiResponse({ status: 201, description: 'The fee structure has been successfully created.', type: FeeStructure })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiBody({ type: CreateFeeStructureDto })
+  async createFeeStructure(
+    @Body() createFeeStructureDto: CreateFeeStructureDto,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @LoginUser('userId') userId: Types.ObjectId
+  ) {
+    return this.accountsService.createFeeStructure(createFeeStructureDto, schoolId, userId);
+  }
+
+  @Get('fee-structures')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Get all fee structures for a school' })
+  @ApiResponse({ status: 200, description: 'Returns all fee structures.', type: [FeeStructure] })
+  async getFeeStructures(@LoginUser('schoolId') schoolId: Types.ObjectId) {
+    return this.accountsService.getFeeStructures(schoolId);
+  }
+
+  @Get('fee-structures/:id')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Get a fee structure by ID' })
+  @ApiResponse({ status: 200, description: 'Returns the fee structure.', type: FeeStructure })
+  @ApiResponse({ status: 404, description: 'Fee structure not found.' })
+  @ApiParam({ name: 'id', type: String })
+  async getFeeStructureById(@Param('id') id: string, @LoginUser('schoolId') schoolId: Types.ObjectId) {
+    return this.accountsService.getFeeStructureById(id, schoolId);
+  }
+
+  @Put('fee-structures/:id')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Update a fee structure' })
+  @ApiResponse({ status: 200, description: 'The fee structure has been successfully updated.', type: FeeStructure })
+  @ApiResponse({ status: 404, description: 'Fee structure not found.' })
+  @ApiParam({ name: 'id', type: String })
+  @ApiBody({ type: UpdateFeeStructureDto })
+  async updateFeeStructure(
+    @Param('id') id: string,
+    @Body() updateFeeStructureDto: UpdateFeeStructureDto,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @LoginUser('userId') userId: Types.ObjectId
+  ) {
+    return this.accountsService.updateFeeStructure(id, updateFeeStructureDto, schoolId, userId);
+  }
+
+  @Delete('fee-structures/:id')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Delete a fee structure' })
+  @ApiResponse({ status: 200, description: 'The fee structure has been successfully deleted.' })
+  @ApiResponse({ status: 404, description: 'Fee structure not found.' })
+  @ApiParam({ name: 'id', type: String })
+  async deleteFeeStructure(
+    @Param('id') id: string, 
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @LoginUser('userId') userId: Types.ObjectId
+  ) {
+    await this.accountsService.deleteFeeStructure(id, schoolId, userId);
+    return { message: 'Fee structure deleted successfully' };
   }
 }
