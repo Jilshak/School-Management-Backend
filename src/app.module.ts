@@ -17,6 +17,7 @@ import { OthersModule } from './others/others.module';
 import { SchoolTypeModule } from './school-type/school-type.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { GuardsModule } from './guards/guards.module';
+import { AssetService } from './assets.service';
 
 @Module({
   imports: [
@@ -48,5 +49,6 @@ import { GuardsModule } from './guards/guards.module';
     SchoolTypeModule,
     AttendanceModule,
   ],
+  // providers:[AssetService]
 })
 export class AppModule {}
