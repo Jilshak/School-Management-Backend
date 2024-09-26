@@ -2,13 +2,17 @@ import { Injectable, NotFoundException, InternalServerErrorException } from '@ne
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
 import { Model, Connection, Types } from 'mongoose';
 import { Account } from 'src/domains/schema/account.schema';
-import { CreateAccountDto, CreatePaymentDueDto } from './dto/create-account.dto';
+import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { FeeType } from 'src/domains/schema/feeType.schema';
 import { PaymentDue } from 'src/domains/schema/paymentdue.schema';
 import { FeeStructure } from 'src/domains/schema/fee-structure.schema';
 import { CreateFeeStructureDto } from './dto/create-fee-structure.dto';
 import { UpdateFeeStructureDto } from './dto/update-fee-structure.dto';
+import { CreatePaymentDueDto } from './dto/create-payment-due.dto';
+import { UpdatePaymentDueDto } from './dto/update-payment-due.dto';
+import { User } from 'src/domains/schema/user.schema';
+import { Student } from 'src/domains/schema/students.schema';
 
 @Injectable()
 export class AccountsService {
@@ -16,6 +20,8 @@ export class AccountsService {
     @InjectModel(Account.name) private accountModel: Model<Account>,
     @InjectModel(FeeType.name) private feeModel: Model<FeeType>,
     @InjectModel(PaymentDue.name) private paymentDueModel: Model<PaymentDue>,
+    @InjectModel(User.name) private userModel: Model<User>,
+    @InjectModel(Student.name) private studentModel: Model<Student>,
     @InjectModel(FeeStructure.name) private feeStructureModel: Model<FeeStructure>,
     @InjectConnection() private connection: Connection
   ) {}
@@ -29,7 +35,7 @@ export class AccountsService {
     }
   }
 
-  async createSendDue(createPaymentDueDto: CreatePaymentDueDto,schoolId:Types.ObjectId,userId:Types.ObjectId): Promise<any> {
+  async create(createAccountDto: CreateAccountDto,schoolId:Types.ObjectId,userId:Types.ObjectId): Promise<any> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -38,7 +44,9 @@ export class AccountsService {
         session = await this.connection.startSession();
         session.startTransaction();
       }
-      const temp =new this.paymentDueModel({...createPaymentDueDto,userId:new Types.ObjectId(createPaymentDueDto.userId),schoolId,createdBy:new Types.ObjectId(userId),updatedBy:new Types.ObjectId(userId)})
+      createAccountDto.fees = createAccountDto.fees.map((fee:any)=>({...fee,duePaymentId:fee.duePaymentId ? new Types.ObjectId(fee.duePaymentId):undefined,dueDateId:fee.dueDateId ? new Types.ObjectId(fee.dueDateId):undefined,feeTypeId:fee.feeTypeId ? new Types.ObjectId(fee.feeTypeId):undefined}))
+      createAccountDto.studentId = new Types.ObjectId(createAccountDto.studentId)
+      const temp =new this.accountModel({...createAccountDto,schoolId,createdBy:new Types.ObjectId(userId),updatedBy:new Types.ObjectId(userId)})
       
       await temp.save({session})
       if (session) {
@@ -49,6 +57,7 @@ export class AccountsService {
       if (session) {
         await session.abortTransaction();
       }
+      console.log(error)
       throw new InternalServerErrorException('Failed to create account');
     } finally {
       if (session) {
@@ -531,6 +540,569 @@ export class AccountsService {
         throw error;
       }
       throw new InternalServerErrorException('Failed to delete fee structure');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async createPaymentDue(createPaymentDueDto: CreatePaymentDueDto, schoolId: Types.ObjectId, userId: Types.ObjectId){
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const paymentDues = createPaymentDueDto.students.map(studentId => ({
+        userId: new Types.ObjectId(studentId),
+        name: createPaymentDueDto.name,
+        feeDetails: createPaymentDueDto.feeDetails.map(detail => ({
+          feeType: detail.feeType,
+          name: detail.description,
+          amount: detail.amount,
+          count: detail.count,
+          description: detail.description
+        })),
+        dueDate: new Date(new Date().getFullYear(), new Date().getMonth(), createPaymentDueDto.dueDate),
+        isPaid: false,
+        createdBy: userId,
+        updatedBy: userId,
+        schoolId: schoolId
+      }));
+
+      const result = await this.paymentDueModel.insertMany(paymentDues, { session });
+      if (session) {
+        await session.commitTransaction();
+      }
+      return result;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      console.log(error);
+      throw new InternalServerErrorException('Failed to create payment due');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async getPaymentDues(schoolId: Types.ObjectId): Promise<any[]> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const paymentDues = await this.paymentDueModel.aggregate([
+        {
+          $match: { schoolId: new Types.ObjectId(schoolId) }
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'userId',
+            foreignField: '_id',
+            as: 'user'
+          }
+        },
+        {
+          $unwind: '$user'
+        },
+        {
+          $lookup: {
+            from: 'classrooms',
+            localField: 'user.classId',
+            foreignField: '_id',
+            as: 'classroom'
+          }
+        },
+        {
+          $unwind: '$classroom'
+        },
+        {
+          $lookup: {
+            from: 'students',
+            localField: 'user._id',
+            foreignField: 'userId',
+            as: 'student'
+          }
+        },
+        {
+          $unwind: '$student'
+        },
+        {
+          $lookup: {
+            from: 'feetypes',
+            localField: 'feeDetails.feeType',
+            foreignField: '_id',
+            as: 'feeTypeDetails'
+          }
+        },
+        {
+          $addFields: {
+            'feeDetails': {
+              $map: {
+                input: '$feeDetails',
+                as: 'feeDetail',
+                in: {
+                  $mergeObjects: [
+                    '$$feeDetail',
+                    {
+                      feeTypeName: {
+                        $let: {
+                          vars: {
+                            matchedFeeType: {
+                              $arrayElemAt: [
+                                {
+                                  $filter: {
+                                    input: '$feeTypeDetails',
+                                    cond: { $eq: ['$$this._id', '$$feeDetail.feeType'] }
+                                  }
+                                },
+                                0
+                              ]
+                            }
+                          },
+                          in: '$$matchedFeeType.name'
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          $addFields: {
+            'feeDetails': {
+              $map: {
+                input: '$feeDetails',
+                as: 'feeDetail',
+                in: {
+                  $mergeObjects: [
+                    '$$feeDetail',
+                    { name: '$$feeDetail.feeTypeName' }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            dueDate: 1,
+            totalAmount: 1,
+            feeDetails: 1,
+            status: 1,
+            'user._id': 1,
+            'user.username': 1,
+            'user.roles': 1,
+            'classroom._id': 1,
+            'classroom.name': 1,
+            'student._id': 1,
+            'student.firstName': 1,
+            'student.lastName': 1,
+            'student.enrollmentNumber': 1,
+            'student.parentsDetails': 1
+          }
+        }
+      ]).session(session).exec();
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return paymentDues;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      throw new InternalServerErrorException('Failed to fetch payment dues');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async getPaymentDueById(id: string, schoolId: Types.ObjectId): Promise<any> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const [paymentDue] = await this.paymentDueModel.aggregate([
+        {
+          $match: { _id: new Types.ObjectId(id), schoolId: new Types.ObjectId(schoolId) }
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'userId',
+            foreignField: '_id',
+            as: 'user'
+          }
+        },
+        {
+          $unwind: '$user'
+        },
+        {
+          $lookup: {
+            from: 'classrooms',
+            localField: 'user.classId',
+            foreignField: '_id',
+            as: 'classroom'
+          }
+        },
+        {
+          $unwind: '$classroom'
+        },
+        {
+          $lookup: {
+            from: 'students',
+            localField: 'user._id',
+            foreignField: 'userId',
+            as: 'student'
+          }
+        },
+        {
+          $unwind: '$student'
+        },
+        {
+          $lookup: {
+            from: 'feetypes',
+            localField: 'feeDetails.feeType',
+            foreignField: '_id',
+            as: 'feeTypeDetails'
+          }
+        },
+        {
+          $addFields: {
+            'feeDetails': {
+              $map: {
+                input: '$feeDetails',
+                as: 'feeDetail',
+                in: {
+                  $mergeObjects: [
+                    '$$feeDetail',
+                    {
+                      feeTypeName: {
+                        $let: {
+                          vars: {
+                            matchedFeeType: {
+                              $arrayElemAt: [
+                                {
+                                  $filter: {
+                                    input: '$feeTypeDetails',
+                                    cond: { $eq: ['$$this._id', '$$feeDetail.feeType'] }
+                                  }
+                                },
+                                0
+                              ]
+                            }
+                          },
+                          in: '$$matchedFeeType.name'
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          $addFields: {
+            'feeDetails': {
+              $map: {
+                input: '$feeDetails',
+                as: 'feeDetail',
+                in: {
+                  $mergeObjects: [
+                    '$$feeDetail',
+                    { name: '$$feeDetail.feeTypeName' }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            dueDate: 1,
+            totalAmount: 1,
+            feeDetails: 1,
+            status: 1,
+            'user._id': 1,
+            'user.username': 1,
+            'user.roles': 1,
+            'classroom._id': 1,
+            'classroom.name': 1,
+            'student._id': 1,
+            'student.firstName': 1,
+            'student.lastName': 1,
+            'student.enrollmentNumber': 1,
+            'student.parentsDetails': 1
+          }
+        }
+      ]).session(session).exec();
+
+      if (!paymentDue) {
+        throw new NotFoundException(`Payment Due with ID ${id} not found`);
+      }
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return paymentDue;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to fetch payment due');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async getPaymentDueByStudentId(userId: string | Types.ObjectId, schoolId: Types.ObjectId): Promise<any> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      userId = new Types.ObjectId(userId);
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const paymentDue = await this.paymentDueModel.aggregate([
+        {
+          $match: { userId, schoolId: new Types.ObjectId(schoolId) }
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'userId',
+            foreignField: '_id',
+            as: 'user'
+          }
+        },
+        {
+          $unwind: '$user'
+        },
+        {
+          $lookup: {
+            from: 'classrooms',
+            localField: 'user.classId',
+            foreignField: '_id',
+            as: 'classroom'
+          }
+        },
+        {
+          $unwind: '$classroom'
+        },
+        {
+          $lookup: {
+            from: 'students',
+            localField: 'user._id',
+            foreignField: 'userId',
+            as: 'student'
+          }
+        },
+        {
+          $unwind: '$student'
+        },
+        {
+          $lookup: {
+            from: 'feetypes',
+            localField: 'feeDetails.feeType',
+            foreignField: '_id',
+            as: 'feeTypeDetails'
+          }
+        },
+        {
+          $addFields: {
+            'feeDetails': {
+              $map: {
+                input: '$feeDetails',
+                as: 'feeDetail',
+                in: {
+                  $mergeObjects: [
+                    '$$feeDetail',
+                    {
+                      feeTypeName: {
+                        $let: {
+                          vars: {
+                            matchedFeeType: {
+                              $arrayElemAt: [
+                                {
+                                  $filter: {
+                                    input: '$feeTypeDetails',
+                                    cond: { $eq: ['$$this._id', '$$feeDetail.feeType'] }
+                                  }
+                                },
+                                0
+                              ]
+                            }
+                          },
+                          in: '$$matchedFeeType.name'
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          $addFields: {
+            'feeDetails': {
+              $map: {
+                input: '$feeDetails',
+                as: 'feeDetail',
+                in: {
+                  $mergeObjects: [
+                    '$$feeDetail',
+                    { name: '$$feeDetail.feeTypeName' }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            dueDate: 1,
+            totalAmount: 1,
+            feeDetails: 1,
+            status: 1,
+            'user._id': 1,
+            'user.username': 1,
+            'user.roles': 1,
+            'classroom._id': 1,
+            'classroom.name': 1,
+            'student._id': 1,
+            'student.firstName': 1,
+            'student.lastName': 1,
+            'student.enrollmentNumber': 1,
+            'student.parentsDetails': 1
+          }
+        }
+      ]).session(session).exec();
+
+      if (!paymentDue) {
+        throw new NotFoundException(`Payment Due with ID ${userId} not found`);
+      }
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return paymentDue;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to fetch payment due');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async updatePaymentDue(id: string, updatePaymentDueDto: UpdatePaymentDueDto, schoolId: Types.ObjectId, userId: Types.ObjectId): Promise<PaymentDue> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const updatedPaymentDue = await this.paymentDueModel.findOneAndUpdate(
+        { _id: new Types.ObjectId(id), schoolId },
+        { ...updatePaymentDueDto, updatedBy: userId },
+        { new: true, session }
+      ).exec();
+
+      if (!updatedPaymentDue) {
+        throw new NotFoundException(`Payment Due with ID ${id} not found`);
+      }
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return updatedPaymentDue;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to update payment due');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async deletePaymentDue(id: string, schoolId: Types.ObjectId, userId: Types.ObjectId): Promise<void> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const result = await this.paymentDueModel.findOneAndDelete({ _id: new Types.ObjectId(id), schoolId }).session(session).exec();
+      if (!result) {
+        throw new NotFoundException(`Payment Due with ID ${id} not found`);
+      }
+
+      if (session) {
+        await session.commitTransaction();
+      }
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to delete payment due');
     } finally {
       if (session) {
         session.endSession();
