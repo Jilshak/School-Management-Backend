@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Receipt</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f9f9f9;
+    }
+
+    .receipt-container {
+      width: 800px;
+      margin: 0 auto;
+      background-color: #fff;
+      padding: 20px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header img {
+      max-width: 150px;
+    }
+
+    .header h1 {
+      margin: 0;
+    }
+
+    .payment-date, .serial-number {
+      text-align: right;
+    }
+
+    .section-title {
+      font-weight: bold;
+      margin-top: 20px;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 5px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    table, th, td {
+      border: 1px solid #ddd;
+    }
+
+    th, td {
+      padding: 10px;
+      text-align: left;
+    }
+
+    .totals {
+      text-align: right;
+    }
+
+    .totals td {
+      font-weight: bold;
+    }
+
+    .footer {
+      margin-top: 30px;
+      text-align: center;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="receipt-container">
+    <div class="header">
+      <img src="company-logo.png" alt="Company Logo">
+      <div class="receipt-details">
+        <p class="payment-date">Payment Date: July 3 2022</p>
+        <p class="serial-number">S. No.: 123-22</p>
+      </div>
+    </div>
+
+    <h1>GRAHAM BELL ACADEMY</h1>
+    <p>134 AL-157 Moulton AL 35650</p>
+    <p>Phone: 222-555-7777 | Email: infor@grahambell.com | Website: www.grahambellacademy.com</p>
+
+    <div class="section-title">Recipient Details</div>
+    <p>Name: Amy Y. Greene</p>
+    <p>Grade: Grade 3</p>
+    <p>Address: 4775 US-280 Birmingham AL 35242</p>
+
+    <div class="section-title">Payment Details</div>
+    <p>Mode of Payment: Dated Cheque</p>
+    <p>Due Date: July 15 2020</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Item#</th>
+          <th>Item Description</th>
+          <th>Quantity</th>
+          <th>Unit Price</th>
+          <th>Total Amount</th>
+        </tr>
+      </thead>
+      <tbody class="table-loop">
+        <tr>
+          <td>1</td>
+          <td>Tuition Fee for 2nd Quarter of 2022</td>
+          <td>1.00</td>
+          <td>$2894.00</td>
+          <td>$2894.00</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <table class="totals">
+      
+      <tr>
+        <td>Total Payment Due</td>
+        <td>{total-amount}</td>
+      </tr>
+    </table>
+
+    <p>Thank you for your prompt payment. We appreciate your timely attention to this matter. If you have any questions or require further assistance, please contact the accounting department. We look forward to continuing our partnership.</p>
+
+    <div class="footer">
+      <p>For any discrepancies in this payment, contact the accounting department.</p>
+    </div>
+  </div>
+
+</body>
+
+<script>
+    const data = {paymentData}
+    const rows = `<tr>
+          <td>[index]</td>
+          <td>[name]</td>
+          <td>[count]</td>
+          <td>[unitPrice]</td>
+          <td>[totalPrice]</td>
+        </tr>`
+    const paymentDetails = JSON.parse(data);
+    let row = '';
+    paymentDetails.forEach((item,i) => {
+         row =row+ rows.replace('[index]', i+1)
+        .replace('[name]', item.name)
+        .replace('[count]', item.quantity)
+        .replace('[unitPrice]', item.unitPrice)
+        .replace('[totalPrice]', item.quantity*item.unitPrice)
+    })
+    console.log(row);
+    document.querySelector('.table-loop').innerHTML = row;
+</script>
+</html>

@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
 import { Model, Connection, Types } from 'mongoose';
 import { Account } from 'src/domains/schema/account.schema';
@@ -13,6 +17,9 @@ import { CreatePaymentDueDto } from './dto/create-payment-due.dto';
 import { UpdatePaymentDueDto } from './dto/update-payment-due.dto';
 import { User } from 'src/domains/schema/user.schema';
 import { Student } from 'src/domains/schema/students.schema';
+import * as fs from 'fs';
+import * as path from 'path';
+import { generatePaymentReciept } from 'src/domains/pdfTemplates/billAndReciept';
 
 @Injectable()
 export class AccountsService {
@@ -22,8 +29,9 @@ export class AccountsService {
     @InjectModel(PaymentDue.name) private paymentDueModel: Model<PaymentDue>,
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Student.name) private studentModel: Model<Student>,
-    @InjectModel(FeeStructure.name) private feeStructureModel: Model<FeeStructure>,
-    @InjectConnection() private connection: Connection
+    @InjectModel(FeeStructure.name)
+    private feeStructureModel: Model<FeeStructure>,
+    @InjectConnection() private connection: Connection,
   ) {}
 
   private async supportsTransactions(): Promise<boolean> {
@@ -35,29 +43,51 @@ export class AccountsService {
     }
   }
 
-  async create(createAccountDto: CreateAccountDto,schoolId:Types.ObjectId,userId:Types.ObjectId): Promise<any> {
+  async create(
+    createAccountDto: CreateAccountDto,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ): Promise<any> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
-      createAccountDto.fees = createAccountDto.fees.map((fee:any)=>({...fee,duePaymentId:fee.duePaymentId ? new Types.ObjectId(fee.duePaymentId):undefined,dueDateId:fee.dueDateId ? new Types.ObjectId(fee.dueDateId):undefined,feeTypeId:fee.feeTypeId ? new Types.ObjectId(fee.feeTypeId):undefined}))
-      createAccountDto.studentId = new Types.ObjectId(createAccountDto.studentId)
-      const temp =new this.accountModel({...createAccountDto,schoolId,createdBy:new Types.ObjectId(userId),updatedBy:new Types.ObjectId(userId)})
-      
-      await temp.save({session})
+      createAccountDto.fees = createAccountDto.fees.map((fee: any) => ({
+        ...fee,
+        duePaymentId: fee.duePaymentId
+          ? new Types.ObjectId(fee.duePaymentId)
+          : undefined,
+        dueDateId: fee.dueDateId
+          ? new Types.ObjectId(fee.dueDateId)
+          : undefined,
+        feeTypeId: fee.feeTypeId
+          ? new Types.ObjectId(fee.feeTypeId)
+          : undefined,
+      }));
+      createAccountDto.studentId = new Types.ObjectId(
+        createAccountDto.studentId,
+      );
+      const temp = new this.accountModel({
+        ...createAccountDto,
+        schoolId,
+        createdBy: new Types.ObjectId(userId),
+        updatedBy: new Types.ObjectId(userId),
+      });
+
+      await temp.save({ session });
       if (session) {
         await session.commitTransaction();
       }
-      return ;
+      return;
     } catch (error) {
       if (session) {
         await session.abortTransaction();
       }
-      console.log(error)
+      console.log(error);
       throw new InternalServerErrorException('Failed to create account');
     } finally {
       if (session) {
@@ -66,17 +96,49 @@ export class AccountsService {
     }
   }
 
-  async findAll(): Promise<Account[]> {
+  async findAll(
+    schoolId: Types.ObjectId,
+    isActive: boolean = true,
+  ): Promise<Account[]> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const accounts = await this.accountModel.find().session(session).exec();
+      const accounts = await this.accountModel
+        .aggregate([
+          { $match: { schoolId } },
+          {
+            $lookup: {
+              from: 'students',
+              localField: 'studentId',
+              foreignField: 'userId',
+              as: 'student',
+            },
+          },
+          {
+            $lookup:{
+              from: 'staffs',
+              localField: 'createdBy',
+              foreignField: 'userId',
+              as: 'createdStaff',
+            }
+          },
+          {
+            $lookup:{
+              from: 'staffs',
+              localField: 'updatedBy',
+              foreignField: 'userId',
+              as: 'updatedStaff',
+            }
+          },
+        ])
+        .session(session)
+        .exec();
 
       if (session) {
         await session.commitTransaction();
@@ -94,17 +156,29 @@ export class AccountsService {
     }
   }
 
+  async generatePaymentReci(){
+    try{
+      generatePaymentReciept()
+    }catch(error){
+      console.log(error);
+      throw new InternalServerErrorException('Failed to generate payment reciept');
+    }
+  }
+
   async findOne(id: string): Promise<Account> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const account = await this.accountModel.findById(id).session(session).exec();
+      const account = await this.accountModel
+        .findById(id)
+        .session(session)
+        .exec();
       if (!account) {
         throw new NotFoundException(`Account with ID ${id} not found`);
       }
@@ -128,17 +202,22 @@ export class AccountsService {
     }
   }
 
-  async update(id: string, updateAccountDto: UpdateAccountDto): Promise<Account> {
+  async update(
+    id: string,
+    updateAccountDto: UpdateAccountDto,
+  ): Promise<Account> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const updatedAccount = await this.accountModel.findByIdAndUpdate(id, updateAccountDto, { new: true, session }).exec();
+      const updatedAccount = await this.accountModel
+        .findByIdAndUpdate(id, updateAccountDto, { new: true, session })
+        .exec();
       if (!updatedAccount) {
         throw new NotFoundException(`Account with ID ${id} not found`);
       }
@@ -166,13 +245,16 @@ export class AccountsService {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const result = await this.accountModel.findByIdAndDelete(id).session(session).exec();
+      const result = await this.accountModel
+        .findByIdAndDelete(id)
+        .session(session)
+        .exec();
       if (!result) {
         throw new NotFoundException(`Account with ID ${id} not found`);
       }
@@ -195,19 +277,24 @@ export class AccountsService {
     }
   }
 
-  async createFeeType(feeType: { name: string; amount: number; description?: string }, schoolId: Types.ObjectId): Promise<FeeType> {
+  async createFeeType(
+    feeType: { name: string; amount: number; description?: string },
+    schoolId: Types.ObjectId,
+  ): Promise<FeeType> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const isExist = await this.feeModel.findOne({ name: feeType.name, schoolId }).session(session);
+      const isExist = await this.feeModel
+        .findOne({ name: feeType.name, schoolId })
+        .session(session);
       if (isExist) {
-        throw new Error("Fee Type Already Exists");
+        throw new Error('Fee Type Already Exists');
       }
 
       const fee = new this.feeModel({ ...feeType, schoolId });
@@ -233,13 +320,16 @@ export class AccountsService {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const feeTypes = await this.feeModel.find({ schoolId,isActive:true }).session(session).exec();
+      const feeTypes = await this.feeModel
+        .find({ schoolId, isActive: true })
+        .session(session)
+        .exec();
 
       if (session) {
         await session.commitTransaction();
@@ -261,13 +351,16 @@ export class AccountsService {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const feeType = await this.feeModel.findOne({ _id:new Types.ObjectId(id), schoolId }).session(session).exec();
+      const feeType = await this.feeModel
+        .findOne({ _id: new Types.ObjectId(id), schoolId })
+        .session(session)
+        .exec();
       if (!feeType) {
         throw new NotFoundException(`Fee Type with ID ${id} not found`);
       }
@@ -291,21 +384,27 @@ export class AccountsService {
     }
   }
 
-  async updateFeeType(id: string, updateData: Partial<FeeType>, schoolId: Types.ObjectId): Promise<FeeType> {
+  async updateFeeType(
+    id: string,
+    updateData: Partial<FeeType>,
+    schoolId: Types.ObjectId,
+  ): Promise<FeeType> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const updatedFeeType = await this.feeModel.findOneAndUpdate(
-        { _id:new Types.ObjectId(id), schoolId },
-        updateData,
-        { new: true, session }
-      ).exec();
+      const updatedFeeType = await this.feeModel
+        .findOneAndUpdate(
+          { _id: new Types.ObjectId(id), schoolId },
+          updateData,
+          { new: true, session },
+        )
+        .exec();
 
       if (!updatedFeeType) {
         throw new NotFoundException(`Fee Type with ID ${id} not found`);
@@ -334,13 +433,19 @@ export class AccountsService {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const result = await this.feeModel.findOneAndUpdate({ _id:new Types.ObjectId(id), schoolId },{$set:{isActive:false}}).session(session).exec();
+      const result = await this.feeModel
+        .findOneAndUpdate(
+          { _id: new Types.ObjectId(id), schoolId },
+          { $set: { isActive: false } },
+        )
+        .session(session)
+        .exec();
       if (!result) {
         throw new NotFoundException(`Fee Type with ID ${id} not found`);
       }
@@ -363,28 +468,34 @@ export class AccountsService {
     }
   }
 
-  async createFeeStructure(createFeeStructureDto: CreateFeeStructureDto, schoolId: Types.ObjectId, userId: Types.ObjectId): Promise<FeeStructure> {
+  async createFeeStructure(
+    createFeeStructureDto: CreateFeeStructureDto,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ): Promise<FeeStructure> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
       // Convert fee type IDs to ObjectId
-      const selectedFeeTypes = createFeeStructureDto.selectedFeeTypes.map(feeType => ({
-        ...feeType,
-        _id: new Types.ObjectId(feeType._id)
-      }));
+      const selectedFeeTypes = createFeeStructureDto.selectedFeeTypes.map(
+        (feeType) => ({
+          ...feeType,
+          _id: new Types.ObjectId(feeType._id),
+        }),
+      );
 
       const feeStructure = new this.feeStructureModel({
         ...createFeeStructureDto,
         selectedFeeTypes,
         schoolId,
         createdBy: userId,
-        updatedBy: userId
+        updatedBy: userId,
       });
       const result = await feeStructure.save({ session });
 
@@ -408,13 +519,16 @@ export class AccountsService {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const feeStructures = await this.feeStructureModel.find({ schoolId }).session(session).exec();
+      const feeStructures = await this.feeStructureModel
+        .find({ schoolId })
+        .session(session)
+        .exec();
 
       if (session) {
         await session.commitTransaction();
@@ -432,17 +546,23 @@ export class AccountsService {
     }
   }
 
-  async getFeeStructureById(id: string, schoolId: Types.ObjectId): Promise<FeeStructure> {
+  async getFeeStructureById(
+    id: string,
+    schoolId: Types.ObjectId,
+  ): Promise<FeeStructure> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const feeStructure = await this.feeStructureModel.findOne({ _id: new Types.ObjectId(id), schoolId }).session(session).exec();
+      const feeStructure = await this.feeStructureModel
+        .findOne({ _id: new Types.ObjectId(id), schoolId })
+        .session(session)
+        .exec();
       if (!feeStructure) {
         throw new NotFoundException(`Fee Structure with ID ${id} not found`);
       }
@@ -466,11 +586,16 @@ export class AccountsService {
     }
   }
 
-  async updateFeeStructure(id: string, updateFeeStructureDto: UpdateFeeStructureDto, schoolId: Types.ObjectId, userId: Types.ObjectId): Promise<FeeStructure> {
+  async updateFeeStructure(
+    id: string,
+    updateFeeStructureDto: UpdateFeeStructureDto,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ): Promise<FeeStructure> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
@@ -479,17 +604,20 @@ export class AccountsService {
       // Convert fee type IDs to ObjectId if present in the update DTO
       let updatedDto = { ...updateFeeStructureDto };
       if (updateFeeStructureDto.selectedFeeTypes) {
-        updatedDto.selectedFeeTypes = updateFeeStructureDto.selectedFeeTypes.map(feeType => ({
-          ...feeType,
-          _id: new Types.ObjectId(feeType._id)
-        }));
+        updatedDto.selectedFeeTypes =
+          updateFeeStructureDto.selectedFeeTypes.map((feeType) => ({
+            ...feeType,
+            _id: new Types.ObjectId(feeType._id),
+          }));
       }
 
-      const updatedFeeStructure = await this.feeStructureModel.findOneAndUpdate(
-        { _id: new Types.ObjectId(id), schoolId },
-        { ...updatedDto, updatedBy: userId },
-        { new: true, session }
-      ).exec();
+      const updatedFeeStructure = await this.feeStructureModel
+        .findOneAndUpdate(
+          { _id: new Types.ObjectId(id), schoolId },
+          { ...updatedDto, updatedBy: userId },
+          { new: true, session },
+        )
+        .exec();
 
       if (!updatedFeeStructure) {
         throw new NotFoundException(`Fee Structure with ID ${id} not found`);
@@ -514,17 +642,24 @@ export class AccountsService {
     }
   }
 
-  async deleteFeeStructure(id: string, schoolId: Types.ObjectId, userId: Types.ObjectId): Promise<void> {
+  async deleteFeeStructure(
+    id: string,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ): Promise<void> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const result = await this.feeStructureModel.findOneAndDelete({ _id: new Types.ObjectId(id), schoolId }).session(session).exec();
+      const result = await this.feeStructureModel
+        .findOneAndDelete({ _id: new Types.ObjectId(id), schoolId })
+        .session(session)
+        .exec();
       if (!result) {
         throw new NotFoundException(`Fee Structure with ID ${id} not found`);
       }
@@ -547,34 +682,44 @@ export class AccountsService {
     }
   }
 
-  async createPaymentDue(createPaymentDueDto: CreatePaymentDueDto, schoolId: Types.ObjectId, userId: Types.ObjectId){
+  async createPaymentDue(
+    createPaymentDueDto: CreatePaymentDueDto,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ) {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const paymentDues = createPaymentDueDto.students.map(studentId => ({
+      const paymentDues = createPaymentDueDto.students.map((studentId) => ({
         userId: new Types.ObjectId(studentId),
         name: createPaymentDueDto.name,
-        feeDetails: createPaymentDueDto.feeDetails.map(detail => ({
+        feeDetails: createPaymentDueDto.feeDetails.map((detail) => ({
           feeType: detail.feeType,
           name: detail.description,
           amount: detail.amount,
           count: detail.count,
-          description: detail.description
+          description: detail.description,
         })),
-        dueDate: new Date(new Date().getFullYear(), new Date().getMonth(), createPaymentDueDto.dueDate),
+        dueDate: new Date(
+          new Date().getFullYear(),
+          new Date().getMonth(),
+          createPaymentDueDto.dueDate,
+        ),
         isPaid: false,
         createdBy: userId,
         updatedBy: userId,
-        schoolId: schoolId
+        schoolId: schoolId,
       }));
 
-      const result = await this.paymentDueModel.insertMany(paymentDues, { session });
+      const result = await this.paymentDueModel.insertMany(paymentDues, {
+        session,
+      });
       if (session) {
         await session.commitTransaction();
       }
@@ -596,129 +741,137 @@ export class AccountsService {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const paymentDues = await this.paymentDueModel.aggregate([
-        {
-          $match: { schoolId: new Types.ObjectId(schoolId) }
-        },
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'userId',
-            foreignField: '_id',
-            as: 'user'
-          }
-        },
-        {
-          $unwind: '$user'
-        },
-        {
-          $lookup: {
-            from: 'classrooms',
-            localField: 'user.classId',
-            foreignField: '_id',
-            as: 'classroom'
-          }
-        },
-        {
-          $unwind: '$classroom'
-        },
-        {
-          $lookup: {
-            from: 'students',
-            localField: 'user._id',
-            foreignField: 'userId',
-            as: 'student'
-          }
-        },
-        {
-          $unwind: '$student'
-        },
-        {
-          $lookup: {
-            from: 'feetypes',
-            localField: 'feeDetails.feeType',
-            foreignField: '_id',
-            as: 'feeTypeDetails'
-          }
-        },
-        {
-          $addFields: {
-            'feeDetails': {
-              $map: {
-                input: '$feeDetails',
-                as: 'feeDetail',
-                in: {
-                  $mergeObjects: [
-                    '$$feeDetail',
-                    {
-                      feeTypeName: {
-                        $let: {
-                          vars: {
-                            matchedFeeType: {
-                              $arrayElemAt: [
-                                {
-                                  $filter: {
-                                    input: '$feeTypeDetails',
-                                    cond: { $eq: ['$$this._id', '$$feeDetail.feeType'] }
-                                  }
-                                },
-                                0
-                              ]
-                            }
+      const paymentDues = await this.paymentDueModel
+        .aggregate([
+          {
+            $match: { schoolId: new Types.ObjectId(schoolId) },
+          },
+          {
+            $lookup: {
+              from: 'users',
+              localField: 'userId',
+              foreignField: '_id',
+              as: 'user',
+            },
+          },
+          {
+            $unwind: '$user',
+          },
+          {
+            $lookup: {
+              from: 'classrooms',
+              localField: 'user.classId',
+              foreignField: '_id',
+              as: 'classroom',
+            },
+          },
+          {
+            $unwind: '$classroom',
+          },
+          {
+            $lookup: {
+              from: 'students',
+              localField: 'user._id',
+              foreignField: 'userId',
+              as: 'student',
+            },
+          },
+          {
+            $unwind: '$student',
+          },
+          {
+            $lookup: {
+              from: 'feetypes',
+              localField: 'feeDetails.feeType',
+              foreignField: '_id',
+              as: 'feeTypeDetails',
+            },
+          },
+          {
+            $addFields: {
+              feeDetails: {
+                $map: {
+                  input: '$feeDetails',
+                  as: 'feeDetail',
+                  in: {
+                    $mergeObjects: [
+                      '$$feeDetail',
+                      {
+                        feeTypeName: {
+                          $let: {
+                            vars: {
+                              matchedFeeType: {
+                                $arrayElemAt: [
+                                  {
+                                    $filter: {
+                                      input: '$feeTypeDetails',
+                                      cond: {
+                                        $eq: [
+                                          '$$this._id',
+                                          '$$feeDetail.feeType',
+                                        ],
+                                      },
+                                    },
+                                  },
+                                  0,
+                                ],
+                              },
+                            },
+                            in: '$$matchedFeeType.name',
                           },
-                          in: '$$matchedFeeType.name'
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        {
-          $addFields: {
-            'feeDetails': {
-              $map: {
-                input: '$feeDetails',
-                as: 'feeDetail',
-                in: {
-                  $mergeObjects: [
-                    '$$feeDetail',
-                    { name: '$$feeDetail.feeTypeName' }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        {
-          $project: {
-            _id: 1,
-            name: 1,
-            dueDate: 1,
-            totalAmount: 1,
-            feeDetails: 1,
-            status: 1,
-            'user._id': 1,
-            'user.username': 1,
-            'user.roles': 1,
-            'classroom._id': 1,
-            'classroom.name': 1,
-            'student._id': 1,
-            'student.firstName': 1,
-            'student.lastName': 1,
-            'student.enrollmentNumber': 1,
-            'student.parentsDetails': 1
-          }
-        }
-      ]).session(session).exec();
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          {
+            $addFields: {
+              feeDetails: {
+                $map: {
+                  input: '$feeDetails',
+                  as: 'feeDetail',
+                  in: {
+                    $mergeObjects: [
+                      '$$feeDetail',
+                      { name: '$$feeDetail.feeTypeName' },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              name: 1,
+              dueDate: 1,
+              totalAmount: 1,
+              feeDetails: 1,
+              status: 1,
+              'user._id': 1,
+              'user.username': 1,
+              'user.roles': 1,
+              'classroom._id': 1,
+              'classroom.name': 1,
+              'student._id': 1,
+              'student.firstName': 1,
+              'student.lastName': 1,
+              'student.enrollmentNumber': 1,
+              'student.parentsDetails': 1,
+            },
+          },
+        ])
+        .session(session)
+        .exec();
 
       if (session) {
         await session.commitTransaction();
@@ -740,129 +893,140 @@ export class AccountsService {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const [paymentDue] = await this.paymentDueModel.aggregate([
-        {
-          $match: { _id: new Types.ObjectId(id), schoolId: new Types.ObjectId(schoolId) }
-        },
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'userId',
-            foreignField: '_id',
-            as: 'user'
-          }
-        },
-        {
-          $unwind: '$user'
-        },
-        {
-          $lookup: {
-            from: 'classrooms',
-            localField: 'user.classId',
-            foreignField: '_id',
-            as: 'classroom'
-          }
-        },
-        {
-          $unwind: '$classroom'
-        },
-        {
-          $lookup: {
-            from: 'students',
-            localField: 'user._id',
-            foreignField: 'userId',
-            as: 'student'
-          }
-        },
-        {
-          $unwind: '$student'
-        },
-        {
-          $lookup: {
-            from: 'feetypes',
-            localField: 'feeDetails.feeType',
-            foreignField: '_id',
-            as: 'feeTypeDetails'
-          }
-        },
-        {
-          $addFields: {
-            'feeDetails': {
-              $map: {
-                input: '$feeDetails',
-                as: 'feeDetail',
-                in: {
-                  $mergeObjects: [
-                    '$$feeDetail',
-                    {
-                      feeTypeName: {
-                        $let: {
-                          vars: {
-                            matchedFeeType: {
-                              $arrayElemAt: [
-                                {
-                                  $filter: {
-                                    input: '$feeTypeDetails',
-                                    cond: { $eq: ['$$this._id', '$$feeDetail.feeType'] }
-                                  }
-                                },
-                                0
-                              ]
-                            }
+      const [paymentDue] = await this.paymentDueModel
+        .aggregate([
+          {
+            $match: {
+              _id: new Types.ObjectId(id),
+              schoolId: new Types.ObjectId(schoolId),
+            },
+          },
+          {
+            $lookup: {
+              from: 'users',
+              localField: 'userId',
+              foreignField: '_id',
+              as: 'user',
+            },
+          },
+          {
+            $unwind: '$user',
+          },
+          {
+            $lookup: {
+              from: 'classrooms',
+              localField: 'user.classId',
+              foreignField: '_id',
+              as: 'classroom',
+            },
+          },
+          {
+            $unwind: '$classroom',
+          },
+          {
+            $lookup: {
+              from: 'students',
+              localField: 'user._id',
+              foreignField: 'userId',
+              as: 'student',
+            },
+          },
+          {
+            $unwind: '$student',
+          },
+          {
+            $lookup: {
+              from: 'feetypes',
+              localField: 'feeDetails.feeType',
+              foreignField: '_id',
+              as: 'feeTypeDetails',
+            },
+          },
+          {
+            $addFields: {
+              feeDetails: {
+                $map: {
+                  input: '$feeDetails',
+                  as: 'feeDetail',
+                  in: {
+                    $mergeObjects: [
+                      '$$feeDetail',
+                      {
+                        feeTypeName: {
+                          $let: {
+                            vars: {
+                              matchedFeeType: {
+                                $arrayElemAt: [
+                                  {
+                                    $filter: {
+                                      input: '$feeTypeDetails',
+                                      cond: {
+                                        $eq: [
+                                          '$$this._id',
+                                          '$$feeDetail.feeType',
+                                        ],
+                                      },
+                                    },
+                                  },
+                                  0,
+                                ],
+                              },
+                            },
+                            in: '$$matchedFeeType.name',
                           },
-                          in: '$$matchedFeeType.name'
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        {
-          $addFields: {
-            'feeDetails': {
-              $map: {
-                input: '$feeDetails',
-                as: 'feeDetail',
-                in: {
-                  $mergeObjects: [
-                    '$$feeDetail',
-                    { name: '$$feeDetail.feeTypeName' }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        {
-          $project: {
-            _id: 1,
-            name: 1,
-            dueDate: 1,
-            totalAmount: 1,
-            feeDetails: 1,
-            status: 1,
-            'user._id': 1,
-            'user.username': 1,
-            'user.roles': 1,
-            'classroom._id': 1,
-            'classroom.name': 1,
-            'student._id': 1,
-            'student.firstName': 1,
-            'student.lastName': 1,
-            'student.enrollmentNumber': 1,
-            'student.parentsDetails': 1
-          }
-        }
-      ]).session(session).exec();
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          {
+            $addFields: {
+              feeDetails: {
+                $map: {
+                  input: '$feeDetails',
+                  as: 'feeDetail',
+                  in: {
+                    $mergeObjects: [
+                      '$$feeDetail',
+                      { name: '$$feeDetail.feeTypeName' },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              name: 1,
+              dueDate: 1,
+              totalAmount: 1,
+              feeDetails: 1,
+              status: 1,
+              'user._id': 1,
+              'user.username': 1,
+              'user.roles': 1,
+              'classroom._id': 1,
+              'classroom.name': 1,
+              'student._id': 1,
+              'student.firstName': 1,
+              'student.lastName': 1,
+              'student.enrollmentNumber': 1,
+              'student.parentsDetails': 1,
+            },
+          },
+        ])
+        .session(session)
+        .exec();
 
       if (!paymentDue) {
         throw new NotFoundException(`Payment Due with ID ${id} not found`);
@@ -887,7 +1051,10 @@ export class AccountsService {
     }
   }
 
-  async getPaymentDueByStudentId(userId: string | Types.ObjectId, schoolId: Types.ObjectId): Promise<any> {
+  async getPaymentDueByStudentId(
+    userId: string | Types.ObjectId,
+    schoolId: Types.ObjectId,
+  ): Promise<any> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -897,123 +1064,131 @@ export class AccountsService {
         session.startTransaction();
       }
 
-      const paymentDue = await this.paymentDueModel.aggregate([
-        {
-          $match: { userId, schoolId: new Types.ObjectId(schoolId) }
-        },
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'userId',
-            foreignField: '_id',
-            as: 'user'
-          }
-        },
-        {
-          $unwind: '$user'
-        },
-        {
-          $lookup: {
-            from: 'classrooms',
-            localField: 'user.classId',
-            foreignField: '_id',
-            as: 'classroom'
-          }
-        },
-        {
-          $unwind: '$classroom'
-        },
-        {
-          $lookup: {
-            from: 'students',
-            localField: 'user._id',
-            foreignField: 'userId',
-            as: 'student'
-          }
-        },
-        {
-          $unwind: '$student'
-        },
-        {
-          $lookup: {
-            from: 'feetypes',
-            localField: 'feeDetails.feeType',
-            foreignField: '_id',
-            as: 'feeTypeDetails'
-          }
-        },
-        {
-          $addFields: {
-            'feeDetails': {
-              $map: {
-                input: '$feeDetails',
-                as: 'feeDetail',
-                in: {
-                  $mergeObjects: [
-                    '$$feeDetail',
-                    {
-                      feeTypeName: {
-                        $let: {
-                          vars: {
-                            matchedFeeType: {
-                              $arrayElemAt: [
-                                {
-                                  $filter: {
-                                    input: '$feeTypeDetails',
-                                    cond: { $eq: ['$$this._id', '$$feeDetail.feeType'] }
-                                  }
-                                },
-                                0
-                              ]
-                            }
+      const paymentDue = await this.paymentDueModel
+        .aggregate([
+          {
+            $match: { userId, schoolId: new Types.ObjectId(schoolId) },
+          },
+          {
+            $lookup: {
+              from: 'users',
+              localField: 'userId',
+              foreignField: '_id',
+              as: 'user',
+            },
+          },
+          {
+            $unwind: '$user',
+          },
+          {
+            $lookup: {
+              from: 'classrooms',
+              localField: 'user.classId',
+              foreignField: '_id',
+              as: 'classroom',
+            },
+          },
+          {
+            $unwind: '$classroom',
+          },
+          {
+            $lookup: {
+              from: 'students',
+              localField: 'user._id',
+              foreignField: 'userId',
+              as: 'student',
+            },
+          },
+          {
+            $unwind: '$student',
+          },
+          {
+            $lookup: {
+              from: 'feetypes',
+              localField: 'feeDetails.feeType',
+              foreignField: '_id',
+              as: 'feeTypeDetails',
+            },
+          },
+          {
+            $addFields: {
+              feeDetails: {
+                $map: {
+                  input: '$feeDetails',
+                  as: 'feeDetail',
+                  in: {
+                    $mergeObjects: [
+                      '$$feeDetail',
+                      {
+                        feeTypeName: {
+                          $let: {
+                            vars: {
+                              matchedFeeType: {
+                                $arrayElemAt: [
+                                  {
+                                    $filter: {
+                                      input: '$feeTypeDetails',
+                                      cond: {
+                                        $eq: [
+                                          '$$this._id',
+                                          '$$feeDetail.feeType',
+                                        ],
+                                      },
+                                    },
+                                  },
+                                  0,
+                                ],
+                              },
+                            },
+                            in: '$$matchedFeeType.name',
                           },
-                          in: '$$matchedFeeType.name'
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        {
-          $addFields: {
-            'feeDetails': {
-              $map: {
-                input: '$feeDetails',
-                as: 'feeDetail',
-                in: {
-                  $mergeObjects: [
-                    '$$feeDetail',
-                    { name: '$$feeDetail.feeTypeName' }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        {
-          $project: {
-            _id: 1,
-            name: 1,
-            dueDate: 1,
-            totalAmount: 1,
-            feeDetails: 1,
-            status: 1,
-            'user._id': 1,
-            'user.username': 1,
-            'user.roles': 1,
-            'classroom._id': 1,
-            'classroom.name': 1,
-            'student._id': 1,
-            'student.firstName': 1,
-            'student.lastName': 1,
-            'student.enrollmentNumber': 1,
-            'student.parentsDetails': 1
-          }
-        }
-      ]).session(session).exec();
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          {
+            $addFields: {
+              feeDetails: {
+                $map: {
+                  input: '$feeDetails',
+                  as: 'feeDetail',
+                  in: {
+                    $mergeObjects: [
+                      '$$feeDetail',
+                      { name: '$$feeDetail.feeTypeName' },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              name: 1,
+              dueDate: 1,
+              totalAmount: 1,
+              feeDetails: 1,
+              status: 1,
+              'user._id': 1,
+              'user.username': 1,
+              'user.roles': 1,
+              'classroom._id': 1,
+              'classroom.name': 1,
+              'student._id': 1,
+              'student.firstName': 1,
+              'student.lastName': 1,
+              'student.enrollmentNumber': 1,
+              'student.parentsDetails': 1,
+            },
+          },
+        ])
+        .session(session)
+        .exec();
 
       if (!paymentDue) {
         throw new NotFoundException(`Payment Due with ID ${userId} not found`);
@@ -1038,21 +1213,28 @@ export class AccountsService {
     }
   }
 
-  async updatePaymentDue(id: string, updatePaymentDueDto: UpdatePaymentDueDto, schoolId: Types.ObjectId, userId: Types.ObjectId): Promise<PaymentDue> {
+  async updatePaymentDue(
+    id: string,
+    updatePaymentDueDto: UpdatePaymentDueDto,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ): Promise<PaymentDue> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const updatedPaymentDue = await this.paymentDueModel.findOneAndUpdate(
-        { _id: new Types.ObjectId(id), schoolId },
-        { ...updatePaymentDueDto, updatedBy: userId },
-        { new: true, session }
-      ).exec();
+      const updatedPaymentDue = await this.paymentDueModel
+        .findOneAndUpdate(
+          { _id: new Types.ObjectId(id), schoolId },
+          { ...updatePaymentDueDto, updatedBy: userId },
+          { new: true, session },
+        )
+        .exec();
 
       if (!updatedPaymentDue) {
         throw new NotFoundException(`Payment Due with ID ${id} not found`);
@@ -1077,17 +1259,24 @@ export class AccountsService {
     }
   }
 
-  async deletePaymentDue(id: string, schoolId: Types.ObjectId, userId: Types.ObjectId): Promise<void> {
+  async deletePaymentDue(
+    id: string,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ): Promise<void> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
-      
+
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
 
-      const result = await this.paymentDueModel.findOneAndDelete({ _id: new Types.ObjectId(id), schoolId }).session(session).exec();
+      const result = await this.paymentDueModel
+        .findOneAndDelete({ _id: new Types.ObjectId(id), schoolId })
+        .session(session)
+        .exec();
       if (!result) {
         throw new NotFoundException(`Payment Due with ID ${id} not found`);
       }

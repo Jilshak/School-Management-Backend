@@ -3,10 +3,7 @@ import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { Types } from 'mongoose';
-import {
-  Attendance,
-  AttendanceDocument,
-} from 'src/domains/schema/attendance.schema';
+import {Attendance} from 'src/domains/schema/attendance.schema';
 import { Model } from 'mongoose';
 import { Student } from 'src/domains/schema/students.schema';
 import { User } from 'src/domains/schema/user.schema';
@@ -16,7 +13,7 @@ import { Classroom } from 'src/domains/schema/classroom.schema';
 export class AttendanceService {
   constructor(
     @InjectModel(Attendance.name)
-    private attendanceModel: Model<AttendanceDocument>,
+    private attendanceModel: Model<Attendance>,
     @InjectModel(Student.name) private studentModel: Model<Student>,
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Classroom.name) private classroomModel: Model<Classroom>,

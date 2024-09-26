@@ -35,6 +35,26 @@ export class AccountsController {
     return this.accountsService.create(createAccountDto,schoolId,userId);
   }
 
+  @Get()
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary:'Get all accounts'})
+  @ApiResponse({ status: 201, description:'The account has been successfully created.'})
+  @ApiResponse({ status: 400, description:'Bad Request.'})
+  @ApiBody({ type: CreateAccountDto })
+  getAccounts(@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    return this.accountsService.findAll(schoolId);
+  }
+
+  @Get("generate-payment-reciept")
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary:'Get all accounts'})
+  @ApiResponse({ status: 201, description:'The account has been successfully created.'})
+  @ApiResponse({ status: 400, description:'Bad Request.'})
+  // @ApiBody({ type: CreateAccountDto })
+  generatePaymentReciept(@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    return this.accountsService.generatePaymentReci();
+  }
+
   @Post('fee-types')
   @Roles('admin', 'accountant')
   @ApiOperation({ summary: 'Create a new fee type' })
