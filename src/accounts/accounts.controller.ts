@@ -1,10 +1,10 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, ValidationPipe } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../shared/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
-import { CreateAccountDto, CreatePaymentDueDto } from './dto/create-account.dto';
+import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { Types } from 'mongoose';
 import { FeeType } from '../domains/schema/feeType.schema';
@@ -14,6 +14,9 @@ import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
 import { FeeStructure } from '../domains/schema/fee-structure.schema';
 import { CreateFeeStructureDto } from './dto/create-fee-structure.dto';
 import { UpdateFeeStructureDto } from './dto/update-fee-structure.dto';
+import { CreatePaymentDueDto } from './dto/create-payment-due.dto';
+import { UpdatePaymentDueDto } from './dto/update-payment-due.dto';
+import { PaymentDue } from 'src/domains/schema/paymentdue.schema';
 
 @ApiTags('accounts')
 @ApiBearerAuth()
@@ -22,14 +25,14 @@ import { UpdateFeeStructureDto } from './dto/update-fee-structure.dto';
 export class AccountsController {
   constructor(private readonly accountsService: AccountsService) {}
 
-  @Post("send-due")
+  @Post()
   @Roles('admin', 'accountant')
   @ApiOperation({ summary:'Create and Send Payment Due'})
   @ApiResponse({ status: 201, description:'The account has been successfully created.'})
   @ApiResponse({ status: 400, description:'Bad Request.'})
   @ApiBody({ type: CreateAccountDto })
-  createSendDue(@Body() createPaymentDueDto: CreatePaymentDueDto,@LoginUser("schoolId") schoolId:Types.ObjectId,@LoginUser("userId") userId:Types.ObjectId) {
-    return this.accountsService.createSendDue(createPaymentDueDto,schoolId,userId);
+  create(@Body(ValidationPipe) createAccountDto: CreateAccountDto,@LoginUser("schoolId") schoolId:Types.ObjectId,@LoginUser("userId") userId:Types.ObjectId) {
+    return this.accountsService.create(createAccountDto,schoolId,userId);
   }
 
   @Post('fee-types')
@@ -147,5 +150,78 @@ export class AccountsController {
   ) {
     await this.accountsService.deleteFeeStructure(id, schoolId, userId);
     return { message: 'Fee structure deleted successfully' };
+  }
+
+  @Post('payment-dues')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Create a new payment due' })
+  @ApiResponse({ status: 201, description: 'The payment due has been successfully created.', type: PaymentDue })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiBody({ type: CreatePaymentDueDto })
+  async createPaymentDue(
+    @Body(ValidationPipe) createPaymentDueDto: CreatePaymentDueDto,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @LoginUser('userId') userId: Types.ObjectId
+  ) {
+    return this.accountsService.createPaymentDue(createPaymentDueDto, schoolId, userId);
+  }
+
+  @Get('payment-dues')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Get all payment dues for a school' })
+  @ApiResponse({ status: 200, description: 'Returns all payment dues.', type: [PaymentDue] })
+  async getPaymentDues(@LoginUser('schoolId') schoolId: Types.ObjectId) {
+    return this.accountsService.getPaymentDues(schoolId);
+  }
+
+  @Get('payment-dues/get-by-student/:id')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Get a payment due by ID' })
+  @ApiResponse({ status: 200, description: 'Returns the payment due.', type: PaymentDue })
+  @ApiResponse({ status: 404, description: 'Payment due not found.' })
+  @ApiParam({ name: 'id', type: String })
+  async getPaymentDueByStudentId(@Param('id') id: string, @LoginUser('schoolId') schoolId: Types.ObjectId) {
+    return this.accountsService.getPaymentDueByStudentId(id, schoolId);
+  }
+
+  @Get('payment-dues/:id')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Get a payment due by ID' })
+  @ApiResponse({ status: 200, description: 'Returns the payment due.', type: PaymentDue })
+  @ApiResponse({ status: 404, description: 'Payment due not found.' })
+  @ApiParam({ name: 'id', type: String })
+  async getPaymentDueById(@Param('id') id: string, @LoginUser('schoolId') schoolId: Types.ObjectId) {
+    return this.accountsService.getPaymentDueById(id, schoolId);
+  }
+
+  @Put('payment-dues/:id')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Update a payment due' })
+  @ApiResponse({ status: 200, description: 'The payment due has been successfully updated.', type: PaymentDue })
+  @ApiResponse({ status: 404, description: 'Payment due not found.' })
+  @ApiParam({ name: 'id', type: String })
+  @ApiBody({ type: UpdatePaymentDueDto })
+  async updatePaymentDue(
+    @Param('id') id: string,
+    @Body() updatePaymentDueDto: UpdatePaymentDueDto,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @LoginUser('userId') userId: Types.ObjectId
+  ) {
+    return this.accountsService.updatePaymentDue(id, updatePaymentDueDto, schoolId, userId);
+  }
+
+  @Delete('payment-dues/:id')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Delete a payment due' })
+  @ApiResponse({ status: 200, description: 'The payment due has been successfully deleted.' })
+  @ApiResponse({ status: 404, description: 'Payment due not found.' })
+  @ApiParam({ name: 'id', type: String })
+  async deletePaymentDue(
+    @Param('id') id: string, 
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @LoginUser('userId') userId: Types.ObjectId
+  ) {
+    await this.accountsService.deletePaymentDue(id, schoolId, userId);
+    return { message: 'Payment due deleted successfully' };
   }
 }

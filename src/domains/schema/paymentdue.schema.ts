@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
-@Schema()
+@Schema({ timestamps: true })
 export class PaymentDue extends Document {
   @Prop({ required: true, type: Types.ObjectId, ref: "User" })
   userId: Types.ObjectId;
@@ -9,11 +9,20 @@ export class PaymentDue extends Document {
   @Prop({ required: true, type: String })
   name: string;
 
-  @Prop({ required: true })
-  amount: number;
-
-  @Prop()
-  description: string;
+  @Prop({ type: [{ 
+    feeType: { type: Types.ObjectId, ref: 'FeeType' },
+    name: String,
+    amount: Number,
+    count: Number,
+    description: String
+  }] })
+  feeDetails: Array<{
+    feeType: Types.ObjectId;
+    name: string;
+    amount: number;
+    count: number;
+    description: string;
+  }>;
 
   @Prop({ required: true, type: Date })
   dueDate: Date;
@@ -21,14 +30,8 @@ export class PaymentDue extends Document {
   @Prop({ required: true, type: Boolean, default: false })
   isPaid: boolean;
 
-  @Prop({ type: Date, default: Date.now, immutable: true })
-  createdAt: Date;
-
   @Prop({ type: Types.ObjectId, ref: "User", required: true, immutable: true })
   createdBy: Types.ObjectId;
-
-  @Prop({ type: Date, default: Date.now })
-  updatedAt: Date;
 
   @Prop({ type: Types.ObjectId, ref: "User" })
   updatedBy: Types.ObjectId;
