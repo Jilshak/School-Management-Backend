@@ -17,7 +17,6 @@
       margin: 0 auto;
       background-color: #fff;
       padding: 20px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     }
 
     .header {
@@ -79,30 +78,31 @@
 
   <div class="receipt-container">
     <div class="header">
-      <img src="company-logo.png" alt="Company Logo">
+      <img src="{school-logo}" alt="Company Logo">
       <div class="receipt-details">
-        <p class="payment-date">Payment Date: July 3 2022</p>
-        <p class="serial-number">S. No.: 123-22</p>
+        <p class="payment-date">Receipt Date: {receipt-date}</p>
+        <p class="serial-number">S. No.: {payment-id}</p>
       </div>
     </div>
 
-    <h1>GRAHAM BELL ACADEMY</h1>
-    <p>134 AL-157 Moulton AL 35650</p>
-    <p>Phone: 222-555-7777 | Email: infor@grahambell.com | Website: www.grahambellacademy.com</p>
+    <h1>{school-name}</h1>
+    <p>{school-address}</p>
+    <p>{school-phone} | {school-email} </p>
 
     <div class="section-title">Recipient Details</div>
-    <p>Name: Amy Y. Greene</p>
-    <p>Grade: Grade 3</p>
-    <p>Address: 4775 US-280 Birmingham AL 35242</p>
+    <p>Name: {name}</p>
+    <p>Class: {class}</p>
+    <p>Address: {address}</p>
 
     <div class="section-title">Payment Details</div>
-    <p>Mode of Payment: Dated Cheque</p>
-    <p>Due Date: July 15 2020</p>
+    <p>Mode of Payment: {payment-mode}</p>
+    <p>Due Date: {due-date}</p>
 
     <table>
       <thead>
         <tr>
           <th>Item#</th>
+          <th>Item Name</th>
           <th>Item Description</th>
           <th>Quantity</th>
           <th>Unit Price</th>
@@ -110,13 +110,7 @@
         </tr>
       </thead>
       <tbody class="table-loop">
-        <tr>
-          <td>1</td>
-          <td>Tuition Fee for 2nd Quarter of 2022</td>
-          <td>1.00</td>
-          <td>$2894.00</td>
-          <td>$2894.00</td>
-        </tr>
+        {rows}
       </tbody>
     </table>
 
@@ -137,25 +131,5 @@
 
 </body>
 
-<script>
-    const data = {paymentData}
-    const rows = `<tr>
-          <td>[index]</td>
-          <td>[name]</td>
-          <td>[count]</td>
-          <td>[unitPrice]</td>
-          <td>[totalPrice]</td>
-        </tr>`
-    const paymentDetails = JSON.parse(data);
-    let row = '';
-    paymentDetails.forEach((item,i) => {
-         row =row+ rows.replace('[index]', i+1)
-        .replace('[name]', item.name)
-        .replace('[count]', item.quantity)
-        .replace('[unitPrice]', item.unitPrice)
-        .replace('[totalPrice]', item.quantity*item.unitPrice)
-    })
-    console.log(row);
-    document.querySelector('.table-loop').innerHTML = row;
-</script>
+
 </html>

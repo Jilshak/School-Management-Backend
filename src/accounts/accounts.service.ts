@@ -19,7 +19,8 @@ import { User } from 'src/domains/schema/user.schema';
 import { Student } from 'src/domains/schema/students.schema';
 import * as fs from 'fs';
 import * as path from 'path';
-import { generatePaymentReciept } from 'src/domains/pdfTemplates/billAndReciept';
+import { generateReciept } from 'src/domains/pdfTemplates/billAndReciept';
+import { School } from 'src/domains/schema/school.schema';
 
 @Injectable()
 export class AccountsService {
@@ -29,6 +30,7 @@ export class AccountsService {
     @InjectModel(PaymentDue.name) private paymentDueModel: Model<PaymentDue>,
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Student.name) private studentModel: Model<Student>,
+    @InjectModel(School.name) private schoolModel: Model<School>,
     @InjectModel(FeeStructure.name)
     private feeStructureModel: Model<FeeStructure>,
     @InjectConnection() private connection: Connection,
@@ -121,20 +123,20 @@ export class AccountsService {
             },
           },
           {
-            $lookup:{
+            $lookup: {
               from: 'staffs',
               localField: 'createdBy',
               foreignField: 'userId',
               as: 'createdStaff',
-            }
+            },
           },
           {
-            $lookup:{
+            $lookup: {
               from: 'staffs',
               localField: 'updatedBy',
               foreignField: 'userId',
               as: 'updatedStaff',
-            }
+            },
           },
         ])
         .session(session)
@@ -156,12 +158,83 @@ export class AccountsService {
     }
   }
 
-  async generatePaymentReci(){
-    try{
-      generatePaymentReciept()
-    }catch(error){
+  async generatePaymentReciept(id: string, schoolId: Types.ObjectId) {
+    try {
+      const [accounts] = await this.accountModel.aggregate([
+        { $match: { schoolId, _id: new Types.ObjectId(id) } },
+        {
+          $lookup: {
+            from: 'students',
+            localField: 'studentId',
+            foreignField: 'userId',
+            as: 'student',
+          },
+        },
+        { $unwind: '$student' },
+        {
+          $lookup: {
+            from: 'classrooms',
+            localField: 'student.classId',
+            foreignField: '_id',
+            as: 'classes',
+          },
+        },
+        { $unwind: '$classes' },
+        {
+          $lookup: {
+            from: 'staffs',
+            localField: 'createdBy',
+            foreignField: 'userId',
+            as: 'createdStaff',
+          },
+        },
+        {
+          $lookup: {
+            from: 'staffs',
+            localField: 'updatedBy',
+            foreignField: 'userId',
+            as: 'updatedStaff',
+          },
+        },
+      ]);
+
+      const paymentDetails = accounts.fees.map((fee: any) => ({
+        name: fee.dueDateId ? fee.name + ' (Payment Due)' : fee.name,
+        quantity: fee.quantity || 1,
+        description: fee.description || 'N/A',
+        unitPrice: fee.amount,
+      }));
+      const school = await this.schoolModel.findById(schoolId);
+      const html = await generateReciept(
+        paymentDetails,
+        accounts.paymentDate,
+        accounts.paymentMode || 'N/A',
+        accounts.student.address || 'N/A',
+        accounts.classes.name +
+          ' (' +
+          accounts.classes.academicYear.startDate.getFullYear() +
+          '-' +
+          accounts.classes.academicYear.endDate
+            .getFullYear()
+            .toString()
+            .slice(-2) +
+          ')',
+        accounts.student.firstName + ' ' + accounts.student.lastName,
+        {
+          address: school.address,
+          email: school.email,
+          logo: school.schoolLogo,
+          name: school.name,
+          phone: school.primaryPhone,
+        },
+        accounts._id.toString()
+      );
+      return html;
+    } catch (error) {
       console.log(error);
-      throw new InternalServerErrorException('Failed to generate payment reciept');
+      throw new InternalServerErrorException(
+        'Failed to generate payment reciept',
+      );
     }
   }
 

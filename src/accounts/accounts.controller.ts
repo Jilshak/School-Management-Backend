@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, ValidationPipe, Res, InternalServerErrorException } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../shared/guards/roles.guard';
@@ -40,20 +40,55 @@ export class AccountsController {
   @ApiOperation({ summary:'Get all accounts'})
   @ApiResponse({ status: 201, description:'The account has been successfully created.'})
   @ApiResponse({ status: 400, description:'Bad Request.'})
-  @ApiBody({ type: CreateAccountDto })
   getAccounts(@LoginUser("schoolId") schoolId:Types.ObjectId) {
     return this.accountsService.findAll(schoolId);
   }
 
-  @Get("generate-payment-reciept")
+  @Get("generate-payment-receipt/:id")
   @Roles('admin', 'accountant')
-  @ApiOperation({ summary:'Get all accounts'})
-  @ApiResponse({ status: 201, description:'The account has been successfully created.'})
-  @ApiResponse({ status: 400, description:'Bad Request.'})
-  // @ApiBody({ type: CreateAccountDto })
-  generatePaymentReciept(@LoginUser("schoolId") schoolId:Types.ObjectId) {
-    return this.accountsService.generatePaymentReci();
-  }
+  @ApiOperation({ summary: 'Generate and download payment receipt' })
+  @ApiResponse({ status: 201, description: 'The payment receipt has been successfully generated.', type: 'application/octet-stream' })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiQuery({ name: 'format', enum: ['html', 'docx'], description: 'File format for the receipt' })
+  async generatePaymentReceipt(
+    @Param("id") id: string,
+    @LoginUser("schoolId") schoolId: Types.ObjectId,
+    @Query('format') format: 'html' | 'docx' = 'html',
+    @Res() res
+  ) {
+    try {
+      // Get the HTML content for the receipt
+      let html:string = await this.accountsService.generatePaymentReciept(id, schoolId);
+    
+      // Basic conversion of HTML string to UTF-8 buffer
+      let fileContent: string | Buffer = html;
+      let contentType: string;
+      let fileExtension: string;
+    
+      switch (format) {
+    
+        case 'docx':
+          // Future implementation: Convert HTML to DOCX
+          contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          fileExtension = 'docx';
+          break;
+    
+        default:
+          contentType = 'text/html';
+          fileExtension = 'html';
+          break;
+      }
+    
+      // Set the headers and send the file
+      res.set({
+        'Content-Type': contentType,
+        'Content-Disposition': `attachment; filename=payment-receipt.${fileExtension}`
+      });
+      res.end(fileContent);
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to generate payment receipt', error.message);
+    }
+  }    
 
   @Post('fee-types')
   @Roles('admin', 'accountant')

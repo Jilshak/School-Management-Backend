@@ -48,6 +48,9 @@ export class Account extends Document {
 
   @Prop({ required: true, default: true })
   isActive: boolean;
+
+  @Prop({ required: false })
+  paymentMode: string;
 }
 
 export const AccountSchema = SchemaFactory.createForClass(Account);

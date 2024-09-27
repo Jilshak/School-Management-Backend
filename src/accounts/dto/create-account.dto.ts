@@ -56,6 +56,10 @@ export class CreateAccountDto {
   @IsDate()
   @Type(() => Date)
   paymentDate: Date;
+  
+  @IsOptional()
+  @IsString()
+  paymentMode:string;
 }
 
 
