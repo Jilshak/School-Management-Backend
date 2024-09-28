@@ -274,7 +274,7 @@ export class UserService {
         ];
       }
 
-      let aggregatePipeline: any = [
+      const aggregatePipeline: any = [
         { $match: query },
         {
           $lookup: {
@@ -425,7 +425,6 @@ export class UserService {
         session = await this.connection.startSession();
         session.startTransaction();
       }
-
       let user: any = await this.userModel
         .findOne({ _id: new Types.ObjectId(id), schoolId, isActive: true })
         .session(session)
@@ -1021,5 +1020,11 @@ export class UserService {
     }
   }
 
- 
+  async isUsernameAvailable(username: string): Promise<boolean> {
+    if (username.length < 3) {
+      return false;
+    }
+    const existingUser = await this.userModel.findOne({ username }).exec();
+    return !existingUser;
+  }
 }

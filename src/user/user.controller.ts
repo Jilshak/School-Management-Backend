@@ -110,6 +110,16 @@ export class UserController {
     return this.userService.findCount(role, schoolId);
   }
 
+  @Get('/getmydetails')
+  @Roles()
+  @ApiOperation({ summary: 'Get my details' })
+  @ApiResponse({ status: 200, description: 'Return the user.', type: User })
+  @ApiResponse({ status: 404, description: 'User not found.' })
+  findMyDetails(@LoginUser('userId') userId: string, @LoginUser("schoolId") schoolId) {
+    return this.userService.findOne(userId, schoolId);
+  }
+
+
   @Get(':id')
   @Roles()
   @ApiOperation({ summary: 'Get a user by id' })
@@ -144,5 +154,18 @@ export class UserController {
     } catch (error) {
       throw new HttpException(error.message, HttpStatus.NOT_FOUND);
     }
+  }
+
+  @Get('check-username/:username')
+  async checkUsernameAvailability(@Param('username') username: string) {
+    if (username.length < 3) {
+      return { available: false, valid: false, message: 'Username must be at least 3 characters long' };
+    }
+    const isAvailable = await this.userService.isUsernameAvailable(username);
+    return { 
+      available: isAvailable, 
+      valid: true,
+      message: isAvailable ? 'Username is available' : 'Username is not available'
+    };
   }
 }
