@@ -158,6 +158,142 @@ export class AccountsService {
     }
   }
 
+  async findById(
+    id: string,
+    schoolId: Types.ObjectId,
+    isActive: boolean = true,
+  ): Promise<Account[]> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const [accounts] = await this.accountModel
+        .aggregate([
+          { $match: { schoolId,_id:new Types.ObjectId(id) } },
+          {
+            $lookup: {
+              from: 'students',
+              localField: 'studentId',
+              foreignField: 'userId',
+              as: 'student',
+            },
+          },
+          { $unwind: '$student' },
+          {
+            $lookup: {
+              from: 'staffs',
+              localField: 'createdBy',
+              foreignField: 'userId',
+              as: 'createdStaff',
+            },
+          },
+          {
+            $lookup: {
+              from: 'staffs',
+              localField: 'updatedBy',
+              foreignField: 'userId',
+              as: 'updatedStaff',
+            },
+          },
+        ])
+        .session(session)
+        .exec();
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return accounts;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      throw new InternalServerErrorException('Failed to fetch accounts');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async findByStudentId(
+    id: string | Types.ObjectId,
+    schoolId: Types.ObjectId,
+    isActive: boolean = true,
+  ): Promise<Account[]> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const accounts = await this.accountModel
+        .aggregate([
+          { $match: { schoolId,studentId:new Types.ObjectId(id) } },
+        ])
+        .session(session)
+        .exec();
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return accounts;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      throw new InternalServerErrorException('Failed to fetch accounts');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async updateAccount(id: string, updateAccountDto: UpdateAccountDto, schoolId: Types.ObjectId, userId: Types.ObjectId) {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      updateAccountDto.fees = updateAccountDto.fees.map((fee: any) => ({
+        ...fee,
+        duePaymentId: fee.duePaymentId
+          ? new Types.ObjectId(fee.duePaymentId)
+          : undefined,
+        dueDateId: fee.dueDateId
+          ? new Types.ObjectId(fee.dueDateId)
+          : undefined,
+        feeTypeId: fee.feeTypeId
+          ? new Types.ObjectId(fee.feeTypeId)
+          : undefined,
+      }));
+      updateAccountDto.studentId = new Types.ObjectId(
+        updateAccountDto.studentId,
+      );
+      const account = await this.accountModel.updateOne({_id:new Types.ObjectId(id),schoolId},{...updateAccountDto,updatedBy:new Types.ObjectId(userId)})
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+      return account
+    }catch(err){
+      if (session) {
+        await session.abortTransaction();
+      }
+      throw new InternalServerErrorException('Failed to update account');
+    }finally{
+      if (session) {
+        session.endSession();
+      }
+    }
+
+  }
   async generatePaymentReciept(id: string, schoolId: Types.ObjectId) {
     try {
       const [accounts] = await this.accountModel.aggregate([
@@ -1109,6 +1245,213 @@ export class AccountsService {
         await session.commitTransaction();
       }
       return paymentDue;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to fetch payment due');
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+
+  async getPaymentDueBalanceByStudentId(
+    userId: string | Types.ObjectId,
+    schoolId: Types.ObjectId,
+  ): Promise<any> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      userId = new Types.ObjectId(userId);
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      const paymentDue = await this.paymentDueModel
+        .aggregate([
+          {
+            $match: { userId, schoolId: new Types.ObjectId(schoolId) },
+          },
+          {
+            $lookup: {
+              from: 'users',
+              localField: 'userId',
+              foreignField: '_id',
+              as: 'user',
+            },
+          },
+          {
+            $unwind: '$user',
+          },
+          {
+            $lookup: {
+              from: 'classrooms',
+              localField: 'user.classId',
+              foreignField: '_id',
+              as: 'classroom',
+            },
+          },
+          {
+            $unwind: '$classroom',
+          },
+          {
+            $lookup: {
+              from: 'students',
+              localField: 'user._id',
+              foreignField: 'userId',
+              as: 'student',
+            },
+          },
+          {
+            $unwind: '$student',
+          },
+          {
+            $lookup: {
+              from: 'feetypes',
+              localField: 'feeDetails.feeType',
+              foreignField: '_id',
+              as: 'feeTypeDetails',
+            },
+          },
+          {
+            $addFields: {
+              feeDetails: {
+                $map: {
+                  input: '$feeDetails',
+                  as: 'feeDetail',
+                  in: {
+                    $mergeObjects: [
+                      '$$feeDetail',
+                      {
+                        feeTypeName: {
+                          $let: {
+                            vars: {
+                              matchedFeeType: {
+                                $arrayElemAt: [
+                                  {
+                                    $filter: {
+                                      input: '$feeTypeDetails',
+                                      cond: {
+                                        $eq: [
+                                          '$$this._id',
+                                          '$$feeDetail.feeType',
+                                        ],
+                                      },
+                                    },
+                                  },
+                                  0,
+                                ],
+                              },
+                            },
+                            in: '$$matchedFeeType.name',
+                          },
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          {
+            $addFields: {
+              feeDetails: {
+                $map: {
+                  input: '$feeDetails',
+                  as: 'feeDetail',
+                  in: {
+                    $mergeObjects: [
+                      '$$feeDetail',
+                      { name: '$$feeDetail.feeTypeName' },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              name: 1,
+              dueDate: 1,
+              totalAmount: 1,
+              feeDetails: 1,
+              status: 1,
+              'user._id': 1,
+              'user.username': 1,
+              'user.roles': 1,
+              'classroom._id': 1,
+              'classroom.name': 1,
+              'student._id': 1,
+              'student.firstName': 1,
+              'student.lastName': 1,
+              'student.enrollmentNumber': 1,
+              'student.parentsDetails': 1,
+            },
+          },
+        ])
+        .session(session)
+        .exec();
+
+      const duePaymentIds = paymentDue.flatMap(due => due.feeDetails.map(fee => fee._id));
+
+      const accounts = await this.accountModel.aggregate([
+        {
+          $match: {
+            schoolId: new Types.ObjectId(schoolId),
+            studentId: new Types.ObjectId(userId),
+            "fees.duePaymentId": { $in: duePaymentIds }
+          },
+        },
+        {
+          $unwind: "$fees"
+        },
+        {
+          $match: {
+            "fees.duePaymentId": { $in: duePaymentIds.map(id => new Types.ObjectId(id)) }
+          }
+        },
+        {
+          $group: {
+            _id: "$fees.duePaymentId",
+            totalPaid: { $sum: "$fees.amount" }
+          }
+        }
+      ]);
+       
+    
+        const calculateBalance = paymentDue.map((dues) => {
+          const balanceDues = dues.feeDetails.map((fee) => {
+            const paidAmount = accounts.find(account => account._id.toString() === fee._id.toString())?.totalPaid || 0;
+            const remainingBalance = fee.amount * fee.count - paidAmount;
+            return {
+              ...fee,
+              paidAmount,
+              remainingBalance
+            };
+          });
+
+          return {
+            ...dues,
+            feeDetails: balanceDues,
+            totalRemainingBalance: balanceDues.reduce((sum, fee) => sum + fee.remainingBalance, 0)
+          };
+        });
+
+      if (!paymentDue) {
+        throw new NotFoundException(`Payment Due with ID ${userId} not found`);
+      }
+
+      if (session) {
+        await session.commitTransaction();
+      }
+      return calculateBalance;
     } catch (error) {
       if (session) {
         await session.abortTransaction();

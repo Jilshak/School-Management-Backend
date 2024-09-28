@@ -471,6 +471,7 @@ export class TimetableService {
     }
     return timetable;
   } catch (error) {
+    console.log(error)
     if (session) {
       await session.abortTransaction();
     }

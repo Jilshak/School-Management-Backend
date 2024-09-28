@@ -451,7 +451,7 @@ export class ClassroomService {
               as: 'classTeacherDetails',
             },
           },
-          { $unwind: '$classTeacherDetails' },
+          { $unwind: { path: '$classTeacherDetails', preserveNullAndEmptyArrays: true } },
           {
             $lookup: {
               from: 'users',
@@ -460,7 +460,7 @@ export class ClassroomService {
               as: 'classTeacherUserDetails',
             },
           },
-          { $unwind: '$classTeacherUserDetails' },
+          { $unwind: { path: '$classTeacherUserDetails', preserveNullAndEmptyArrays: true } },
           {
             $lookup: {
               from: 'users',
@@ -502,11 +502,17 @@ export class ClassroomService {
               name: 1,
               academicYear: 1,
               classTeacher: {
-                _id: '$classTeacherDetails._id',
-                firstName: '$classTeacherDetails.firstName',
-                lastName: '$classTeacherDetails.lastName',
-                email: '$classTeacherUserDetails.email',
-                isActive: '$classTeacherUserDetails.isActive',
+                $cond: {
+                  if: { $ifNull: ['$classTeacherDetails', false] },
+                  then: {
+                    _id: '$classTeacherDetails._id',
+                    firstName: '$classTeacherDetails.firstName',
+                    lastName: '$classTeacherDetails.lastName',
+                    email: '$classTeacherUserDetails.email',
+                    isActive: '$classTeacherUserDetails.isActive',
+                  },
+                  else: null
+                }
               },
               students: {
                 $map: {

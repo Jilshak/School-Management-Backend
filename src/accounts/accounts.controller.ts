@@ -44,6 +44,18 @@ export class AccountsController {
     return this.accountsService.findAll(schoolId);
   }
 
+  @Get("/get-stuedent-accounts-details")
+  @Roles('student')
+  @ApiOperation({ summary:'Get all accounts'})
+  @ApiResponse({ status: 201, description:'The account has been successfully created.'})
+  @ApiResponse({ status: 400, description:'Bad Request.'})
+ async getAccountsOfStudent(@LoginUser("userId") studentId:Types.ObjectId,@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    const accounts = await this.accountsService.findByStudentId(studentId,schoolId);
+    const paymentDues =await this.accountsService.getPaymentDueBalanceByStudentId(studentId,schoolId);
+    return {accounts,paymentDues};
+  }
+
+
   @Get("generate-payment-receipt/:id")
   @Roles('admin', 'accountant')
   @ApiOperation({ summary: 'Generate and download payment receipt' })
@@ -57,10 +69,7 @@ export class AccountsController {
     @Res() res
   ) {
     try {
-      // Get the HTML content for the receipt
       let html:string = await this.accountsService.generatePaymentReciept(id, schoolId);
-    
-      // Basic conversion of HTML string to UTF-8 buffer
       let fileContent: string | Buffer = html;
       let contentType: string;
       let fileExtension: string;
@@ -68,7 +77,6 @@ export class AccountsController {
       switch (format) {
     
         case 'docx':
-          // Future implementation: Convert HTML to DOCX
           contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
           fileExtension = 'docx';
           break;
@@ -79,7 +87,6 @@ export class AccountsController {
           break;
       }
     
-      // Set the headers and send the file
       res.set({
         'Content-Type': contentType,
         'Content-Disposition': `attachment; filename=payment-receipt.${fileExtension}`
@@ -88,7 +95,9 @@ export class AccountsController {
     } catch (error) {
       throw new InternalServerErrorException('Failed to generate payment receipt', error.message);
     }
-  }    
+  }   
+
+
 
   @Post('fee-types')
   @Roles('admin', 'accountant')
@@ -99,6 +108,8 @@ export class AccountsController {
   async createFeeType(@Body() createFeeTypeDto: CreateFeeTypeDto,  @LoginUser('schoolId') schoolId: Types.ObjectId) {
     return this.accountsService.createFeeType(createFeeTypeDto,schoolId);
   }
+
+
 
   @Get('fee-types')
   @Roles('admin', 'accountant')
@@ -249,6 +260,16 @@ export class AccountsController {
     return this.accountsService.getPaymentDueById(id, schoolId);
   }
 
+  @Get('payment-dues-balance/get-by-student/:id')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Get a payment due by ID' })
+  @ApiResponse({ status: 200, description: 'Returns the payment due.', type: PaymentDue })
+  @ApiResponse({ status: 404, description: 'Payment due not found.' })
+  @ApiParam({ name: 'id', type: String })
+  async getPaymentDueBalanceByStudentId(@Param('id') id: string, @LoginUser('schoolId') schoolId: Types.ObjectId) {
+    return this.accountsService.getPaymentDueBalanceByStudentId(id, schoolId);
+  }
+
   @Put('payment-dues/:id')
   @Roles('admin', 'accountant')
   @ApiOperation({ summary: 'Update a payment due' })
@@ -279,4 +300,22 @@ export class AccountsController {
     await this.accountsService.deletePaymentDue(id, schoolId, userId);
     return { message: 'Payment due deleted successfully' };
   }
+
+  @Get(":id")
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary:'Get all accounts'})
+  @ApiResponse({ status: 201, description:'The account has been successfully created.'})
+  @ApiResponse({ status: 400, description:'Bad Request.'})
+  getAccountsById(@Param("id") id:string,@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    return this.accountsService.findById(id,schoolId);
+  } 
+
+  @Put(":id")
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary:'Get all accounts'})
+  @ApiResponse({ status: 201, description:'The account has been successfully created.'})
+  @ApiResponse({ status: 400, description:'Bad Request.'})
+  updateAccounts(@Param("id") id:string,@Body(ValidationPipe) updateAccountDto:UpdateAccountDto,@LoginUser("schoolId") schoolId:Types.ObjectId,@LoginUser("userId") userId:Types.ObjectId) {
+    return this.accountsService.updateAccount(id,updateAccountDto,schoolId,userId);
+  } 
 }

@@ -41,6 +41,21 @@ export class ExamController {
     return this.examService.createClassTest(createExamDto,schoolId);
   }
 
+  @Get("offline-exam/student")
+  @Roles('student')
+  @ApiOperation({ summary: 'Get all offline exams' })
+  @ApiResponse({ status: 200, description: 'Returns all offline exams.' })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  findAllOfflineExamForStudent(
+    @LoginUser("classId") classId: Types.ObjectId,
+    @LoginUser("schoolId") schoolId: Types.ObjectId
+  ) {
+    return this.examService.findAllOfflineExamsForStudent(classId, schoolId);
+  }
+
   @Get("offline-exam")
   @Roles('admin', 'teacher')
   @ApiOperation({ summary: 'Get all offline exams' })

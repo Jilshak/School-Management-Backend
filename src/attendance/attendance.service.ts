@@ -179,7 +179,7 @@ export class AttendanceService {
   }
 
   async findOne(
-    studentId: string,
+    studentId: string | Types.ObjectId,
     schoolId: Types.ObjectId,
     month?: number,
   ): Promise<any> {
@@ -187,10 +187,20 @@ export class AttendanceService {
       const studentObjectId = new Types.ObjectId(studentId);
       const currentDate = new Date();
       const targetMonth = month !== undefined ? month : currentDate.getMonth();
-      const targetYear = currentDate.getFullYear();
+      
+      // Determine the academic year
+      const academicYearStart = 8; // September (0-based index)
+      let targetYear = currentDate.getFullYear();
+      
+      if (targetMonth < academicYearStart) {
+        targetYear = currentDate.getMonth() < academicYearStart ? currentDate.getFullYear() : currentDate.getFullYear() + 1;
+      } else {
+        targetYear = currentDate.getMonth() >= academicYearStart ? currentDate.getFullYear() : currentDate.getFullYear() - 1;
+      }
 
       const firstDayOfMonth = new Date(targetYear, targetMonth, 1);
       const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0);
+
 
       const result = await this.studentModel.aggregate([
         // Match the student
@@ -214,41 +224,30 @@ export class AttendanceService {
         {
           $lookup: {
             from: 'attendances',
-            let: { classId: '$user.classId', studentId: '$_id' },
+            let: { classId: '$user.classId', studentId: '$userId' },
             pipeline: [
               {
                 $match: {
                   $expr: {
                     $and: [
                       { $eq: ['$classId', '$$classId'] },
-                      { $in: ['$$studentId', '$studentsAttendance.studentId'] },
                       { $gte: ['$attendanceDate', firstDayOfMonth] },
                       { $lte: ['$attendanceDate', lastDayOfMonth] },
                     ],
                   },
                 },
               },
+              { $unwind: '$studentsAttendance' },
+              {
+                $match: {
+                  $expr: { $eq: ['$studentsAttendance.studentId', '$$studentId'] },
+                },
+              },
               { $sort: { attendanceDate: 1 } },
               {
                 $project: {
                   date: '$attendanceDate',
-                  status: {
-                    $arrayElemAt: [
-                      {
-                        $filter: {
-                          input: '$studentsAttendance',
-                          cond: { $eq: ['$$this.studentId', '$$studentId'] },
-                        },
-                      },
-                      0,
-                    ],
-                  },
-                },
-              },
-              {
-                $project: {
-                  date: 1,
-                  status: '$status.status',
+                  status: '$studentsAttendance.status',
                 },
               },
             ],

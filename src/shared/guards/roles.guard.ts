@@ -37,7 +37,8 @@ export class RolesGuard implements CanActivate {
       userId: userDetail._id,
       username: userDetail.username,
       roles: userDetail.roles,
-      schoolId: userDetail.schoolId
+      schoolId: userDetail.schoolId,
+      classId: userDetail.classId
     };
     request.user = loginUser
     return this.matchRoles(roles, loginUser.roles);
