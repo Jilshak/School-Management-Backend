@@ -8,6 +8,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
 import { Types } from 'mongoose';
+import { UserRole } from 'src/domains/enums/user-roles.enum';
 
 @ApiTags('timetable')
 @ApiBearerAuth()
@@ -64,7 +65,7 @@ export class TimetableController {
   }
 
   @Get(':classId')
-  @Roles()
+  @Roles('admin', 'teacher', UserRole.STUDENT)
   @ApiOperation({ summary: 'Get a timetable by id' })
   @ApiResponse({ status: 200, description: 'Return the timetable.' })
   @ApiResponse({ status: 404, description: 'Timetable not found.' })

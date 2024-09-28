@@ -53,6 +53,21 @@ export class AttendanceController {
     return this.attendanceService.create(createAttendanceDto,schoolId);
   }
 
+  @Get('/student-attendance')
+  @Roles(UserRole.STUDENT)
+  @ApiOperation({ summary: 'Get attendance records for a student' })
+  @ApiParam({ name: 'studentId', type: 'string', description: 'ID of the student' })
+  @ApiQuery({ name: 'month', type: 'number', required: false, description: 'Month number (0-11, where 0 is January). If not provided, current month is used.' })
+  @ApiResponse({ status: 200, description: 'Returns attendance records for the specified student.' })
+  @ApiResponse({ status: 404, description: 'Student not found.' })
+  findOneStudent(
+    @LoginUser("userId") studentId: Types.ObjectId,
+    @LoginUser("schoolId") schoolId: Types.ObjectId,
+    @Query('month') month?: number
+  ) {
+    return this.attendanceService.findOne(studentId, schoolId, month);
+  }
+
   @Get(":classId")
   @ApiOperation({ summary: 'Get all attendance records for a class' })
   @ApiParam({ name: 'classId', type: 'string', description: 'ID of the class' })
@@ -74,7 +89,10 @@ export class AttendanceController {
     return this.attendanceService.findOfaDate(classId,schoolId,date);
   }
 
+
+
   @Get('/by-student/:studentId')
+  @Roles(UserRole.ADMIN,UserRole.TEACHER)
   @ApiOperation({ summary: 'Get attendance records for a student' })
   @ApiParam({ name: 'studentId', type: 'string', description: 'ID of the student' })
   @ApiQuery({ name: 'month', type: 'number', required: false, description: 'Month number (0-11, where 0 is January). If not provided, current month is used.' })
