@@ -11,6 +11,7 @@ import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
 import { Types } from 'mongoose';
 import { UserRole } from 'src/domains/enums/user-roles.enum';
 import { HttpException, HttpStatus } from '@nestjs/common';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @ApiTags('user')
 @ApiBearerAuth()
@@ -140,6 +141,18 @@ export class UserController {
   @ApiBody({ type: UpdateUserDto })
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @LoginUser("schoolId") schoolId) {
     return this.userService.update(id, updateUserDto, schoolId);
+  }
+
+  @Patch('reset-password/:id')
+  @Roles(UserRole.ADMIN,UserRole.HR, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Update a user' })
+  @ApiResponse({ status: 200, description: 'The user has been successfully updated.', type: User })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiResponse({ status: 404, description: 'User not found.' })
+  @ApiParam({ name: 'id', required: true, description: 'User ID' })
+  @ApiBody({ type: ResetPasswordDto })
+  async resetPassword(@Param('id') id: string, @Body() resetPasswordDto: ResetPasswordDto, @LoginUser("schoolId") schoolId) {
+    return this.userService.resetPassword(id, resetPasswordDto, schoolId);
   }
 
   @Delete(':id')
