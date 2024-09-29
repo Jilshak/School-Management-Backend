@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, ValidationPipe, Res, InternalServerErrorException } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../shared/guards/roles.guard';
@@ -40,20 +40,64 @@ export class AccountsController {
   @ApiOperation({ summary:'Get all accounts'})
   @ApiResponse({ status: 201, description:'The account has been successfully created.'})
   @ApiResponse({ status: 400, description:'Bad Request.'})
-  @ApiBody({ type: CreateAccountDto })
   getAccounts(@LoginUser("schoolId") schoolId:Types.ObjectId) {
     return this.accountsService.findAll(schoolId);
   }
 
-  @Get("generate-payment-reciept")
-  @Roles('admin', 'accountant')
+  @Get("/get-stuedent-accounts-details")
+  @Roles('student')
   @ApiOperation({ summary:'Get all accounts'})
   @ApiResponse({ status: 201, description:'The account has been successfully created.'})
   @ApiResponse({ status: 400, description:'Bad Request.'})
-  // @ApiBody({ type: CreateAccountDto })
-  generatePaymentReciept(@LoginUser("schoolId") schoolId:Types.ObjectId) {
-    return this.accountsService.generatePaymentReci();
+ async getAccountsOfStudent(@LoginUser("userId") studentId:Types.ObjectId,@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    const accounts = await this.accountsService.findByStudentId(studentId,schoolId);
+    const paymentDues =await this.accountsService.getPaymentDueBalanceByStudentId(studentId,schoolId);
+    return {accounts,paymentDues};
   }
+
+
+  @Get("generate-payment-receipt/:id")
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Generate and download payment receipt' })
+  @ApiResponse({ status: 201, description: 'The payment receipt has been successfully generated.', type: 'application/octet-stream' })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiQuery({ name: 'format', enum: ['html', 'docx'], description: 'File format for the receipt' })
+  async generatePaymentReceipt(
+    @Param("id") id: string,
+    @LoginUser("schoolId") schoolId: Types.ObjectId,
+    @Query('format') format: 'html' | 'docx' = 'html',
+    @Res() res
+  ) {
+    try {
+      const html:string = await this.accountsService.generatePaymentReciept(id, schoolId);
+      const fileContent: string | Buffer = html;
+      let contentType: string;
+      let fileExtension: string;
+    
+      switch (format) {
+    
+        case 'docx':
+          contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          fileExtension = 'docx';
+          break;
+    
+        default:
+          contentType = 'text/html';
+          fileExtension = 'html';
+          break;
+      }
+    
+      res.set({
+        'Content-Type': contentType,
+        'Content-Disposition': `attachment; filename=payment-receipt.${fileExtension}`
+      });
+      res.end(fileContent);
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to generate payment receipt', error.message);
+    }
+  }   
+
+
 
   @Post('fee-types')
   @Roles('admin', 'accountant')
@@ -64,6 +108,8 @@ export class AccountsController {
   async createFeeType(@Body() createFeeTypeDto: CreateFeeTypeDto,  @LoginUser('schoolId') schoolId: Types.ObjectId) {
     return this.accountsService.createFeeType(createFeeTypeDto,schoolId);
   }
+
+
 
   @Get('fee-types')
   @Roles('admin', 'accountant')
@@ -214,6 +260,16 @@ export class AccountsController {
     return this.accountsService.getPaymentDueById(id, schoolId);
   }
 
+  @Get('payment-dues-balance/get-by-student/:id')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Get a payment due by ID' })
+  @ApiResponse({ status: 200, description: 'Returns the payment due.', type: PaymentDue })
+  @ApiResponse({ status: 404, description: 'Payment due not found.' })
+  @ApiParam({ name: 'id', type: String })
+  async getPaymentDueBalanceByStudentId(@Param('id') id: string, @LoginUser('schoolId') schoolId: Types.ObjectId) {
+    return this.accountsService.getPaymentDueBalanceByStudentId(id, schoolId);
+  }
+
   @Put('payment-dues/:id')
   @Roles('admin', 'accountant')
   @ApiOperation({ summary: 'Update a payment due' })
@@ -244,4 +300,22 @@ export class AccountsController {
     await this.accountsService.deletePaymentDue(id, schoolId, userId);
     return { message: 'Payment due deleted successfully' };
   }
+
+  @Get(":id")
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary:'Get all accounts'})
+  @ApiResponse({ status: 201, description:'The account has been successfully created.'})
+  @ApiResponse({ status: 400, description:'Bad Request.'})
+  getAccountsById(@Param("id") id:string,@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    return this.accountsService.findById(id,schoolId);
+  } 
+
+  @Put(":id")
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary:'Get all accounts'})
+  @ApiResponse({ status: 201, description:'The account has been successfully created.'})
+  @ApiResponse({ status: 400, description:'Bad Request.'})
+  updateAccounts(@Param("id") id:string,@Body(ValidationPipe) updateAccountDto:UpdateAccountDto,@LoginUser("schoolId") schoolId:Types.ObjectId,@LoginUser("userId") userId:Types.ObjectId) {
+    return this.accountsService.updateAccount(id,updateAccountDto,schoolId,userId);
+  } 
 }

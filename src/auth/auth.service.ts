@@ -41,7 +41,7 @@ export class AuthService {
   }
 
   async login(user: any) {
-    const payload = { username: user?.username, sub: user?._id,role:user?.roles,classTeacherOf:user?.classTeacherOf };
+    const payload = { username: user?.username, sub: user?._id,role:user?.roles,classTeacherOf:user?.classTeacherOf,classId:user?.roles.includes('student') ? user.classId:undefined};
     return {
       access_token: this.jwtService.sign(payload,{secret:process.env.JWT_SECRET as string})
     };

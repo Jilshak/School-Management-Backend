@@ -32,7 +32,7 @@ import { CreateTimeTableDto } from './dto/create-time-table.dto';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { CreateSyllabusDto } from './dto/create-syllabus.dto';
 import { CreateStudyMaterialDto } from './dto/create-study-material.dto';
-import { listFilter } from 'src/domains/utility/listFilter';
+import { listFilter } from 'src/domains/utility/functions';
 import { Student } from 'src/domains/schema/students.schema';
 import { User } from 'src/domains/schema/user.schema';
 
@@ -451,7 +451,7 @@ export class ClassroomService {
               as: 'classTeacherDetails',
             },
           },
-          { $unwind: '$classTeacherDetails' },
+          { $unwind: { path: '$classTeacherDetails', preserveNullAndEmptyArrays: true } },
           {
             $lookup: {
               from: 'users',
@@ -460,7 +460,7 @@ export class ClassroomService {
               as: 'classTeacherUserDetails',
             },
           },
-          { $unwind: '$classTeacherUserDetails' },
+          { $unwind: { path: '$classTeacherUserDetails', preserveNullAndEmptyArrays: true } },
           {
             $lookup: {
               from: 'users',
@@ -502,11 +502,17 @@ export class ClassroomService {
               name: 1,
               academicYear: 1,
               classTeacher: {
-                _id: '$classTeacherDetails._id',
-                firstName: '$classTeacherDetails.firstName',
-                lastName: '$classTeacherDetails.lastName',
-                email: '$classTeacherUserDetails.email',
-                isActive: '$classTeacherUserDetails.isActive',
+                $cond: {
+                  if: { $ifNull: ['$classTeacherDetails', false] },
+                  then: {
+                    _id: '$classTeacherDetails._id',
+                    firstName: '$classTeacherDetails.firstName',
+                    lastName: '$classTeacherDetails.lastName',
+                    email: '$classTeacherUserDetails.email',
+                    isActive: '$classTeacherUserDetails.isActive',
+                  },
+                  else: null
+                }
               },
               students: {
                 $map: {

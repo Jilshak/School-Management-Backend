@@ -17,7 +17,10 @@
       margin: 0 auto;
       background-color: #fff;
       padding: 20px;
+<<<<<<< HEAD
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+=======
+>>>>>>> remotes/school-backend/main
     }
 
     .header {
@@ -79,6 +82,7 @@
 
   <div class="receipt-container">
     <div class="header">
+<<<<<<< HEAD
       <img src="company-logo.png" alt="Company Logo">
       <div class="receipt-details">
         <p class="payment-date">Payment Date: July 3 2022</p>
@@ -98,11 +102,36 @@
     <div class="section-title">Payment Details</div>
     <p>Mode of Payment: Dated Cheque</p>
     <p>Due Date: July 15 2020</p>
+=======
+      <img src="{school-logo}" alt="Company Logo">
+      <div class="receipt-details">
+        <p class="payment-date">Receipt Date: {receipt-date}</p>
+        <p class="serial-number">S. No.: {payment-id}</p>
+      </div>
+    </div>
+
+    <h1>{school-name}</h1>
+    <p>{school-address}</p>
+    <p>{school-phone} | {school-email} </p>
+
+    <div class="section-title">Recipient Details</div>
+    <p>Name: {name}</p>
+    <p>Class: {class}</p>
+    <p>Address: {address}</p>
+
+    <div class="section-title">Payment Details</div>
+    <p>Mode of Payment: {payment-mode}</p>
+    <p>Due Date: {due-date}</p>
+>>>>>>> remotes/school-backend/main
 
     <table>
       <thead>
         <tr>
           <th>Item#</th>
+<<<<<<< HEAD
+=======
+          <th>Item Name</th>
+>>>>>>> remotes/school-backend/main
           <th>Item Description</th>
           <th>Quantity</th>
           <th>Unit Price</th>
@@ -110,6 +139,7 @@
         </tr>
       </thead>
       <tbody class="table-loop">
+<<<<<<< HEAD
         <tr>
           <td>1</td>
           <td>Tuition Fee for 2nd Quarter of 2022</td>
@@ -117,6 +147,9 @@
           <td>$2894.00</td>
           <td>$2894.00</td>
         </tr>
+=======
+        {rows}
+>>>>>>> remotes/school-backend/main
       </tbody>
     </table>
 
@@ -137,6 +170,7 @@
 
 </body>
 
+<<<<<<< HEAD
 <script>
     const data = {paymentData}
     const rows = `<tr>
@@ -158,4 +192,7 @@
     console.log(row);
     document.querySelector('.table-loop').innerHTML = row;
 </script>
+=======
+
+>>>>>>> remotes/school-backend/main
 </html>

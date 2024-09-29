@@ -328,6 +328,176 @@ export class ExamService {
     };
   }
 
+  async findAllOfflineExamsForStudent(
+    classId: Types.ObjectId,
+    schoolId: Types.ObjectId,
+  ) {
+
+    const classTests = await this.classTestModel.aggregate([
+      {
+        $match: {
+          schoolId: new Types.ObjectId(schoolId),
+          classId: new Types.ObjectId(classId),
+        },
+      },
+      {
+        $lookup: {
+          from: 'subjects',
+          localField: 'subjectId',
+          foreignField: '_id',
+          as: 'subjectId',
+        },
+      },
+      {
+        $lookup: {
+          from: 'classrooms',
+          localField: 'classId',
+          foreignField: '_id',
+          as: 'classId',
+        },
+      },
+      {
+        $unwind: '$subjectId',
+      },
+      {
+        $unwind: '$classId',
+      },
+      {
+        $lookup: {
+          from: 'timetables',
+          let: { periods: '$periods', classId: '$classId._id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$classId', '$$classId'] },
+              },
+            },
+            {
+              $project: {
+                allDays: {
+                  $objectToArray: {
+                    monday: '$monday',
+                    tuesday: '$tuesday',
+                    wednesday: '$wednesday',
+                    thursday: '$thursday',
+                    friday: '$friday',
+                    saturday: '$saturday',
+                  },
+                },
+              },
+            },
+            { $unwind: '$allDays' },
+            { $unwind: '$allDays.v' },
+            {
+              $match: {
+                $expr: { $in: ['$allDays.v._id', '$$periods'] },
+              },
+            },
+            {
+              $project: {
+                _id: '$allDays.v._id',
+                day: '$allDays.k',
+                startTime: '$allDays.v.startTime',
+                endTime: '$allDays.v.endTime',
+                subjectId: '$allDays.v.subjectId',
+                teacherId: '$allDays.v.teacherId',
+              },
+            },
+          ],
+          as: 'timetableEntries',
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          date: 1,
+          periods: 1,
+          'subjectId._id': 1,
+          'subjectId.name': 1,
+          'classId._id': 1,
+          'classId.name': 1,
+          timetableEntries: 1,
+          description: 1,
+        },
+      },
+    ]);
+
+    const semExams = await this.semExamModel.aggregate([
+      {
+        $match: {
+          schoolId: new Types.ObjectId(schoolId),
+        },
+      },
+      {
+        $lookup: {
+          from: 'classrooms',
+          localField: 'classId',
+          foreignField: '_id',
+          as: 'classId',
+        },
+      },
+      {
+        $unwind: '$classId',
+      },
+      {
+        $lookup: {
+          from: 'subjects',
+          localField: 'exams.subjectId',
+          foreignField: '_id',
+          as: 'subjects',
+        },
+      },
+    
+      {
+        $project: {
+          _id: 1,
+          exams: {
+            $map: {
+              input: '$exams',
+              as: 'exam',
+              in: {
+                subjectId: {
+                  $arrayElemAt: [
+                    '$subjects',
+                    { $indexOfArray: ['$subjects._id', '$$exam.subjectId'] },
+                  ],
+                },
+                date: '$$exam.date',
+                startTime: '$$exam.startTime',
+                endTime: '$$exam.endTime',
+                description: '$$exam.description',
+              },
+            },
+          },
+          'classId._id': 1,
+          'classId.name': 1,
+        },
+      },
+    ]);
+
+    const combinedExams = [
+      ...classTests.map((test) => ({ ...test, examType: 'Class Test' })),
+      ...semExams.map((exam) => ({
+        ...exam,
+        examType: 'Sem Exam',
+        date: exam.exams[0]?.date,
+      })),
+    ];
+
+    // Sort combined exams by date
+    combinedExams.sort(
+      (a, b) =>
+        new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
+    );
+
+    return {
+      exams: combinedExams,
+      total:
+        (await this.classTestModel.countDocuments({ schoolId })) +
+        (await this.semExamModel.countDocuments({ schoolId })),
+    };
+  }
+
   // New CRUD operations for SemExam
   async getSemExam(id: string, schoolId: Types.ObjectId): Promise<any> {
     const exam = await this.semExamModel

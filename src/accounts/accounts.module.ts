@@ -9,6 +9,7 @@ import { PaymentDue, PaymentDueSchema } from 'src/domains/schema/paymentdue.sche
 import { FeeStructure, FeeStructureSchema } from 'src/domains/schema/fee-structure.schema';
 import { User, UserSchema } from 'src/domains/schema/user.schema';
 import { Student, StudentSchema } from 'src/domains/schema/students.schema';
+import { School, SchoolSchema } from 'src/domains/schema/school.schema';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { Student, StudentSchema } from 'src/domains/schema/students.schema';
       { name: FeeStructure.name, schema: FeeStructureSchema },
       { name: User.name, schema: UserSchema },
       { name: Student.name, schema: StudentSchema },
+      { name: School.name, schema: SchoolSchema },
     ]),
     GuardsModule,
   ],
