@@ -440,7 +440,9 @@ export class UserService {
         const studentDetails = await this.studentModel.findOne({
           userId: user._id,
         }).session(session).lean();
-        user = { ...user, ...studentDetails };
+        const classroom = await this.classModel.findOne({classTeacherId:user.classId,isActive:true})
+
+        user = { ...user, ...studentDetails,classroom };
       } else {
         // For non-student roles (STAFF, TEACHER, etc.)
         const staffDetails = await this.staffModel.findOne({
@@ -450,7 +452,7 @@ export class UserService {
 
         if (user.roles.includes(UserRole.TEACHER)) {
           const teacherDetails = await this.teacherModel.findOne({
-            userId: user._id,
+            userId: user.userId,
           }).session(session).lean();
           
           if (teacherDetails) {
@@ -459,11 +461,13 @@ export class UserService {
             const subjects = await this.subjectModel.find({
               _id: { $in: subjectIds }
             }).session(session).lean();
+            const classroom =await this.classModel.findOne({classTeacherId:user.userId,isActive:true})
             
             user = { 
               ...user, 
               ...teacherDetails, 
-              subjects: subjects 
+              subjects: subjects,
+              classroom 
             };
           } else {
             user.subjects = [];
@@ -517,7 +521,6 @@ export class UserService {
         { _id: new Types.ObjectId(id), schoolId },
         {
           $set: {
-            email: updateUserDto.email,
             roles: updateUserDto.roles,
             classId: updateUserDto.roles.includes(UserRole.STUDENT)
               ? new Types.ObjectId(updateUserDto.classId)
