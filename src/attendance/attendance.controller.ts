@@ -34,15 +34,18 @@ export class AttendanceController {
           studentsAttendance: [
             {
               studentId: '60d5ecb54acf3e001f3f9f20',
-              status: 'present'
+              status: 'present',
+              remark: 'fever'
             },
             {
               studentId: '60d5ecb54acf3e001f3f9f21',
-              status: 'absent'
+              status: 'absent',
+              remark: 'fever'
             },
             {
               studentId: '60d5ecb54acf3e001f3f9f23',
-              status: 'halfday'
+              status: 'halfday',
+              remark: 'fever'
             }
           ]
         }
@@ -56,10 +59,10 @@ export class AttendanceController {
   @Get(":classId")
   @ApiOperation({ summary: 'Get all attendance records for a class' })
   @ApiParam({ name: 'classId', type: 'string', description: 'ID of the class' })
-  @ApiQuery({ name: 'month', type: 'date', description: 'ID of the class' })
+  @ApiQuery({ name: 'month', type: 'date', description: 'ID of the class', required: false })
   @ApiResponse({ status: 200, description: 'Returns all attendance records for the specified class.' })
   @ApiResponse({ status: 404, description: 'Class not found.' })
-  findAll(@Param("classId") classId: string,@Query("month") month:Date) {
+  findAll(@Param("classId") classId: string,@Query("month") month: Date) {
     return this.attendanceService.findAll(classId,month);
   }
 

@@ -1,4 +1,4 @@
-import { IsDate, IsMongoId, IsArray, ValidateNested, IsEnum, IsString } from 'class-validator';
+import { IsDate, IsMongoId, IsArray, ValidateNested, IsEnum, IsString, IsOptional } from 'class-validator';
 import { Type } from 'class-transformer';
 
 enum AttendanceStatus {
@@ -13,6 +13,10 @@ class StudentAttendance {
 
   @IsEnum(AttendanceStatus)
   status: AttendanceStatus;
+
+  @IsString()
+  @IsOptional()
+  remark?: string;
 }
 
 export class CreateAttendanceDto {
