@@ -1,11 +1,12 @@
 import { Injectable, UnauthorizedException, InternalServerErrorException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
-import { Model, Connection } from 'mongoose';
+import { Model, Connection, Types } from 'mongoose';
 import { User } from '../domains/schema/user.schema';
 import * as bcrypt from 'bcrypt';
 import { UserRole } from 'src/domains/enums/user-roles.enum';
 import { Classroom } from 'src/domains/schema/classroom.schema';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class AuthService {
@@ -13,7 +14,8 @@ export class AuthService {
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Classroom.name) private classroomModel: Model<Classroom>,
     private jwtService: JwtService,
-    @InjectConnection() private connection: Connection
+    @InjectConnection() private connection: Connection,
+    private readonly notificationService: NotificationService
   ) {}
 
   private async supportsTransactions(): Promise<boolean> {
@@ -45,6 +47,26 @@ export class AuthService {
     return {
       access_token: this.jwtService.sign(payload,{secret:process.env.JWT_SECRET as string})
     };
+  }
+
+  async updateFcmToken(userId: Types.ObjectId, token: string) {
+    try {
+      const isTokenExists = await this.userModel.findOne({fcmToken:token})
+      if(isTokenExists){
+        this.userModel.updateOne({_id:userId},{$pull:{fcmToken:token}})
+      }
+      const result = await this.userModel.updateOne(
+        { _id: userId },
+        { $addToSet: { fcmToken: token } }
+      );
+      this.notificationService.sendNotification(token, 'FCM Token Updated', 'Your FCM token has been updated');
+
+      if (result.modifiedCount === 0) {
+        throw new Error('User not found or token already exists');
+      }
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to update FCM token');
+    }
   }
 
 

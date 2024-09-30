@@ -11,6 +11,7 @@ import {
   Classroom,
   ClassroomSchema,
 } from 'src/domains/schema/classroom.schema';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Module({
   imports: [
@@ -27,7 +28,7 @@ import {
       { name: Classroom.name, schema: ClassroomSchema },
     ]),
   ],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy,NotificationService],
   exports: [AuthService, PassportModule],
   controllers: [AuthController],
 })

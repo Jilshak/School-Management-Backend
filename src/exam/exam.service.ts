@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   InternalServerErrorException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
 import { Model, Connection, Types } from 'mongoose';
@@ -73,7 +74,7 @@ export class ExamService {
       if (session) {
         await session.abortTransaction();
       }
-      throw new InternalServerErrorException('Failed to create sem exam');
+      this.handleError(error, 'Failed to create sem exam');
     } finally {
       if (session) {
         session.endSession();
@@ -113,7 +114,7 @@ export class ExamService {
       if (session) {
         await session.abortTransaction();
       }
-      throw new InternalServerErrorException('Failed to create sem exam');
+      this.handleError(error, 'Failed to create class test');
     } finally {
       if (session) {
         session.endSession();
@@ -135,377 +136,19 @@ export class ExamService {
     // Ensure limit is a number
     const numericLimit = Number(limit);
 
-    const classTests = await this.classTestModel.aggregate([
-      {
-        $match: {
-          schoolId: new Types.ObjectId(schoolId),
-        },
-      },
-      {
-        $lookup: {
-          from: 'subjects',
-          localField: 'subjectId',
-          foreignField: '_id',
-          as: 'subjectId',
-        },
-      },
-      {
-        $lookup: {
-          from: 'classrooms',
-          localField: 'classId',
-          foreignField: '_id',
-          as: 'classId',
-        },
-      },
-      {
-        $unwind: '$subjectId',
-      },
-      {
-        $unwind: '$classId',
-      },
-      {
-        $lookup: {
-          from: 'timetables',
-          let: { periods: '$periods', classId: '$classId._id' },
-          pipeline: [
-            {
-              $match: {
-                $expr: { $eq: ['$classId', '$$classId'] },
-              },
-            },
-            {
-              $project: {
-                allDays: {
-                  $objectToArray: {
-                    monday: '$monday',
-                    tuesday: '$tuesday',
-                    wednesday: '$wednesday',
-                    thursday: '$thursday',
-                    friday: '$friday',
-                    saturday: '$saturday',
-                  },
-                },
-              },
-            },
-            { $unwind: '$allDays' },
-            { $unwind: '$allDays.v' },
-            {
-              $match: {
-                $expr: { $in: ['$allDays.v._id', '$$periods'] },
-              },
-            },
-            {
-              $project: {
-                _id: '$allDays.v._id',
-                day: '$allDays.k',
-                startTime: '$allDays.v.startTime',
-                endTime: '$allDays.v.endTime',
-                subjectId: '$allDays.v.subjectId',
-                teacherId: '$allDays.v.teacherId',
-              },
-            },
-          ],
-          as: 'timetableEntries',
-        },
-      },
-      {
-        $match: {
-          $or: [
-            { 'classId.name': { $regex: search, $options: 'i' } },
-            { 'subjectId.name': { $regex: search, $options: 'i' } },
-          ],
-        },
-      },
-      {
-        $skip: skip,
-      },
-      {
-        $limit: numericLimit,
-      },
-      {
-        $project: {
-          _id: 1,
-          date: 1,
-          periods: 1,
-          'subjectId._id': 1,
-          'subjectId.name': 1,
-          'classId._id': 1,
-          'classId.name': 1,
-          timetableEntries: 1,
-          description: 1,
-        },
-      },
-    ]);
-
-    const semExams = await this.semExamModel.aggregate([
-      {
-        $match: {
-          schoolId: new Types.ObjectId(schoolId),
-        },
-      },
-      {
-        $lookup: {
-          from: 'classrooms',
-          localField: 'classId',
-          foreignField: '_id',
-          as: 'classId',
-        },
-      },
-      {
-        $unwind: '$classId',
-      },
-      {
-        $lookup: {
-          from: 'subjects',
-          localField: 'exams.subjectId',
-          foreignField: '_id',
-          as: 'subjects',
-        },
-      },
-      {
-        $match: {
-          $or: [
-            { 'classId.name': { $regex: search, $options: 'i' } },
-            { 'subjects.name': { $regex: search, $options: 'i' } },
-          ],
-        },
-      },
-      {
-        $skip: skip,
-      },
-      {
-        $limit: numericLimit,
-      },
-      {
-        $project: {
-          _id: 1,
-          exams: {
-            $map: {
-              input: '$exams',
-              as: 'exam',
-              in: {
-                subjectId: {
-                  $arrayElemAt: [
-                    '$subjects',
-                    { $indexOfArray: ['$subjects._id', '$$exam.subjectId'] },
-                  ],
-                },
-                date: '$$exam.date',
-                startTime: '$$exam.startTime',
-                endTime: '$$exam.endTime',
-                description: '$$exam.description',
-              },
-            },
-          },
-          'classId._id': 1,
-          'classId.name': 1,
-        },
-      },
-    ]);
-
-    const combinedExams = [
-      ...classTests.map((test) => ({ ...test, examType: 'Class Test' })),
-      ...semExams.map((exam) => ({
-        ...exam,
-        examType: 'Sem Exam',
-        date: exam.exams[0]?.date,
-      })),
-    ];
-
-    // Sort combined exams by date
-    combinedExams.sort(
-      (a, b) =>
-        new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
-    );
-
-    return {
-      exams: combinedExams,
-      total:
-        (await this.classTestModel.countDocuments({ schoolId })) +
-        (await this.semExamModel.countDocuments({ schoolId })),
-      page,
-      limit: numericLimit,
-    };
-  }
-
-  async findAllOfflineExamsForStudent(
-    classId: Types.ObjectId,
-    schoolId: Types.ObjectId,
-  ) {
-
-    const classTests = await this.classTestModel.aggregate([
-      {
-        $match: {
-          schoolId: new Types.ObjectId(schoolId),
-          classId: new Types.ObjectId(classId),
-        },
-      },
-      {
-        $lookup: {
-          from: 'subjects',
-          localField: 'subjectId',
-          foreignField: '_id',
-          as: 'subjectId',
-        },
-      },
-      {
-        $lookup: {
-          from: 'classrooms',
-          localField: 'classId',
-          foreignField: '_id',
-          as: 'classId',
-        },
-      },
-      {
-        $unwind: '$subjectId',
-      },
-      {
-        $unwind: '$classId',
-      },
-      {
-        $lookup: {
-          from: 'timetables',
-          let: { periods: '$periods', classId: '$classId._id' },
-          pipeline: [
-            {
-              $match: {
-                $expr: { $eq: ['$classId', '$$classId'] },
-              },
-            },
-            {
-              $project: {
-                allDays: {
-                  $objectToArray: {
-                    monday: '$monday',
-                    tuesday: '$tuesday',
-                    wednesday: '$wednesday',
-                    thursday: '$thursday',
-                    friday: '$friday',
-                    saturday: '$saturday',
-                  },
-                },
-              },
-            },
-            { $unwind: '$allDays' },
-            { $unwind: '$allDays.v' },
-            {
-              $match: {
-                $expr: { $in: ['$allDays.v._id', '$$periods'] },
-              },
-            },
-            {
-              $project: {
-                _id: '$allDays.v._id',
-                day: '$allDays.k',
-                startTime: '$allDays.v.startTime',
-                endTime: '$allDays.v.endTime',
-                subjectId: '$allDays.v.subjectId',
-                teacherId: '$allDays.v.teacherId',
-              },
-            },
-          ],
-          as: 'timetableEntries',
-        },
-      },
-      {
-        $project: {
-          _id: 1,
-          date: 1,
-          periods: 1,
-          'subjectId._id': 1,
-          'subjectId.name': 1,
-          'classId._id': 1,
-          'classId.name': 1,
-          timetableEntries: 1,
-          description: 1,
-        },
-      },
-    ]);
-
-    const semExams = await this.semExamModel.aggregate([
-      {
-        $match: {
-          schoolId: new Types.ObjectId(schoolId),
-        },
-      },
-      {
-        $lookup: {
-          from: 'classrooms',
-          localField: 'classId',
-          foreignField: '_id',
-          as: 'classId',
-        },
-      },
-      {
-        $unwind: '$classId',
-      },
-      {
-        $lookup: {
-          from: 'subjects',
-          localField: 'exams.subjectId',
-          foreignField: '_id',
-          as: 'subjects',
-        },
-      },
-    
-      {
-        $project: {
-          _id: 1,
-          exams: {
-            $map: {
-              input: '$exams',
-              as: 'exam',
-              in: {
-                subjectId: {
-                  $arrayElemAt: [
-                    '$subjects',
-                    { $indexOfArray: ['$subjects._id', '$$exam.subjectId'] },
-                  ],
-                },
-                date: '$$exam.date',
-                startTime: '$$exam.startTime',
-                endTime: '$$exam.endTime',
-                description: '$$exam.description',
-              },
-            },
-          },
-          'classId._id': 1,
-          'classId.name': 1,
-        },
-      },
-    ]);
-
-    const combinedExams = [
-      ...classTests.map((test) => ({ ...test, examType: 'Class Test' })),
-      ...semExams.map((exam) => ({
-        ...exam,
-        examType: 'Sem Exam',
-        date: exam.exams[0]?.date,
-      })),
-    ];
-
-    // Sort combined exams by date
-    combinedExams.sort(
-      (a, b) =>
-        new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
-    );
-
-    return {
-      exams: combinedExams,
-      total:
-        (await this.classTestModel.countDocuments({ schoolId })) +
-        (await this.semExamModel.countDocuments({ schoolId })),
-    };
-  }
-
-  // New CRUD operations for SemExam
-  async getSemExam(id: string, schoolId: Types.ObjectId): Promise<any> {
-    const exam = await this.semExamModel
-      .aggregate([
+    try {
+      const classTests = await this.classTestModel.aggregate([
         {
           $match: {
-            _id: new Types.ObjectId(id),
             schoolId: new Types.ObjectId(schoolId),
+          },
+        },
+        {
+          $lookup: {
+            from: 'subjects',
+            localField: 'subjectId',
+            foreignField: '_id',
+            as: 'subjectId',
           },
         },
         {
@@ -513,109 +156,19 @@ export class ExamService {
             from: 'classrooms',
             localField: 'classId',
             foreignField: '_id',
-            as: 'classroom',
-          },
-        },
-
-        {
-          $unwind: '$classroom',
-        },
-        {
-          $lookup: {
-            from: 'subjects',
-            localField: 'exams.subjectId',
-            foreignField: '_id',
-            as: 'subjects',
+            as: 'classId',
           },
         },
         {
-          $project: {
-            _id: 1,
-            classId: '$classroom._id',
-            className: '$classroom.name',
-            exams: {
-              $map: {
-                input: '$exams',
-                as: 'exam',
-                in: {
-                  _id: '$$exam._id',
-                  subjectId: '$$exam.subjectId',
-                  subjectName: {
-                    $let: {
-                      vars: {
-                        subject: {
-                          $arrayElemAt: [
-                            {
-                              $filter: {
-                                input: '$subjects',
-                                cond: {
-                                  $eq: ['$$this._id', '$$exam.subjectId'],
-                                },
-                              },
-                            },
-                            0,
-                          ],
-                        },
-                      },
-                      in: '$$subject.name',
-                    },
-                  },
-                  date: '$$exam.date',
-                  startTime: '$$exam.startTime',
-                  endTime: '$$exam.endTime',
-                  description: '$$exam.description',
-                },
-              },
-            },
-          },
+          $unwind: '$subjectId',
         },
-      ])
-      .exec();
-
-    if (!exam || exam.length === 0) {
-      throw new NotFoundException(`Semester exam with ID "${id}" not found`);
-    }
-
-    return exam[0];
-  }
-
-  async updateSemExam(
-    id: string,
-    updateExamDto: UpdateSemExamDto,
-    schoolId: Types.ObjectId,
-  ): Promise<SemExam> {
-    const updatedExam = await this.semExamModel
-      .findOneAndUpdate(
-        { _id: id, schoolId },
-        { $set: updateExamDto },
-        { new: true },
-      )
-      .exec();
-
-    if (!updatedExam) {
-      throw new NotFoundException(`Semester exam with ID "${id}" not found`);
-    }
-    return updatedExam;
-  }
-
-  async deleteSemExam(id: string, schoolId: Types.ObjectId): Promise<void> {
-    const result = await this.semExamModel
-      .deleteOne({ _id: id, schoolId })
-      .exec();
-    if (result.deletedCount === 0) {
-      throw new NotFoundException(`Semester exam with ID "${id}" not found`);
-    }
-  }
-
-  // New CRUD operations for ClassTest
-  async getClassTest(id: string, schoolId: Types.ObjectId) {
-    const classTest = await this.classTestModel
-      .aggregate([
-        { $match: { _id: new Types.ObjectId(id), schoolId } },
+        {
+          $unwind: '$classId',
+        },
         {
           $lookup: {
             from: 'timetables',
-            let: { periods: '$periods', classId: '$classId' },
+            let: { periods: '$periods', classId: '$classId._id' },
             pipeline: [
               {
                 $match: {
@@ -658,11 +211,38 @@ export class ExamService {
           },
         },
         {
-          $lookup: {
-            from: 'subjects',
-            localField: 'subjectId',
-            foreignField: '_id',
-            as: 'subject',
+          $match: {
+            $or: [
+              { 'classId.name': { $regex: search, $options: 'i' } },
+              { 'subjectId.name': { $regex: search, $options: 'i' } },
+            ],
+          },
+        },
+        {
+          $skip: skip,
+        },
+        {
+          $limit: numericLimit,
+        },
+        {
+          $project: {
+            _id: 1,
+            date: 1,
+            periods: 1,
+            'subjectId._id': 1,
+            'subjectId.name': 1,
+            'classId._id': 1,
+            'classId.name': 1,
+            timetableEntries: 1,
+            description: 1,
+          },
+        },
+      ]);
+
+      const semExams = await this.semExamModel.aggregate([
+        {
+          $match: {
+            schoolId: new Types.ObjectId(schoolId),
           },
         },
         {
@@ -670,32 +250,476 @@ export class ExamService {
             from: 'classrooms',
             localField: 'classId',
             foreignField: '_id',
-            as: 'classroom',
+            as: 'classId',
+          },
+        },
+        {
+          $unwind: '$classId',
+        },
+        {
+          $lookup: {
+            from: 'subjects',
+            localField: 'exams.subjectId',
+            foreignField: '_id',
+            as: 'subjects',
+          },
+        },
+        {
+          $match: {
+            $or: [
+              { 'classId.name': { $regex: search, $options: 'i' } },
+              { 'subjects.name': { $regex: search, $options: 'i' } },
+            ],
+          },
+        },
+        {
+          $skip: skip,
+        },
+        {
+          $limit: numericLimit,
+        },
+        {
+          $project: {
+            _id: 1,
+            exams: {
+              $map: {
+                input: '$exams',
+                as: 'exam',
+                in: {
+                  subjectId: {
+                    $arrayElemAt: [
+                      '$subjects',
+                      { $indexOfArray: ['$subjects._id', '$$exam.subjectId'] },
+                    ],
+                  },
+                  date: '$$exam.date',
+                  startTime: '$$exam.startTime',
+                  endTime: '$$exam.endTime',
+                  description: '$$exam.description',
+                },
+              },
+            },
+            'classId._id': 1,
+            'classId.name': 1,
+          },
+        },
+      ]);
+
+      const combinedExams = [
+        ...classTests.map((test) => ({ ...test, examType: 'Class Test' })),
+        ...semExams.map((exam) => ({
+          ...exam,
+          examType: 'Sem Exam',
+          date: exam.exams[0]?.date,
+        })),
+      ];
+
+      // Sort combined exams by date
+      combinedExams.sort(
+        (a, b) =>
+          new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
+      );
+
+      return {
+        exams: combinedExams,
+        total:
+          (await this.classTestModel.countDocuments({ schoolId })) +
+          (await this.semExamModel.countDocuments({ schoolId })),
+        page,
+        limit: numericLimit,
+      };
+    } catch (error) {
+      this.handleError(error, 'Failed to fetch offline exams');
+    }
+  }
+
+  async findAllOfflineExamsForStudent(
+    classId: Types.ObjectId,
+    schoolId: Types.ObjectId,
+  ) {
+    try {
+      const classTests = await this.classTestModel.aggregate([
+        {
+          $match: {
+            schoolId: new Types.ObjectId(schoolId),
+            classId: new Types.ObjectId(classId),
+          },
+        },
+        {
+          $lookup: {
+            from: 'subjects',
+            localField: 'subjectId',
+            foreignField: '_id',
+            as: 'subjectId',
+          },
+        },
+        {
+          $lookup: {
+            from: 'classrooms',
+            localField: 'classId',
+            foreignField: '_id',
+            as: 'classId',
+          },
+        },
+        {
+          $unwind: '$subjectId',
+        },
+        {
+          $unwind: '$classId',
+        },
+        {
+          $lookup: {
+            from: 'timetables',
+            let: { periods: '$periods', classId: '$classId._id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ['$classId', '$$classId'] },
+                },
+              },
+              {
+                $project: {
+                  allDays: {
+                    $objectToArray: {
+                      monday: '$monday',
+                      tuesday: '$tuesday',
+                      wednesday: '$wednesday',
+                      thursday: '$thursday',
+                      friday: '$friday',
+                      saturday: '$saturday',
+                    },
+                  },
+                },
+              },
+              { $unwind: '$allDays' },
+              { $unwind: '$allDays.v' },
+              {
+                $match: {
+                  $expr: { $in: ['$allDays.v._id', '$$periods'] },
+                },
+              },
+              {
+                $project: {
+                  _id: '$allDays.v._id',
+                  day: '$allDays.k',
+                  startTime: '$allDays.v.startTime',
+                  endTime: '$allDays.v.endTime',
+                  subjectId: '$allDays.v.subjectId',
+                  teacherId: '$allDays.v.teacherId',
+                },
+              },
+            ],
+            as: 'timetableEntries',
           },
         },
         {
           $project: {
             _id: 1,
             date: 1,
-            subjectId: 1,
-            classId: 1,
             periods: 1,
-            schoolId: 1,
-            createdAt: 1,
-            updatedAt: 1,
-            subject: { $arrayElemAt: ['$subject', 0] },
-            classroom: { $arrayElemAt: ['$classroom', 0] },
+            'subjectId._id': 1,
+            'subjectId.name': 1,
+            'classId._id': 1,
+            'classId.name': 1,
             timetableEntries: 1,
             description: 1,
           },
         },
-      ])
-      .exec();
+      ]);
 
-    if (!classTest || classTest.length === 0) {
-      throw new NotFoundException(`Class test with ID "${id}" not found`);
+      const semExams = await this.semExamModel.aggregate([
+        {
+          $match: {
+            schoolId: new Types.ObjectId(schoolId),
+          },
+        },
+        {
+          $lookup: {
+            from: 'classrooms',
+            localField: 'classId',
+            foreignField: '_id',
+            as: 'classId',
+          },
+        },
+        {
+          $unwind: '$classId',
+        },
+        {
+          $lookup: {
+            from: 'subjects',
+            localField: 'exams.subjectId',
+            foreignField: '_id',
+            as: 'subjects',
+          },
+        },
+      
+        {
+          $project: {
+            _id: 1,
+            exams: {
+              $map: {
+                input: '$exams',
+                as: 'exam',
+                in: {
+                  subjectId: {
+                    $arrayElemAt: [
+                      '$subjects',
+                      { $indexOfArray: ['$subjects._id', '$$exam.subjectId'] },
+                    ],
+                  },
+                  date: '$$exam.date',
+                  startTime: '$$exam.startTime',
+                  endTime: '$$exam.endTime',
+                  description: '$$exam.description',
+                },
+              },
+            },
+            'classId._id': 1,
+            'classId.name': 1,
+          },
+        },
+      ]);
+
+      const combinedExams = [
+        ...classTests.map((test) => ({ ...test, examType: 'Class Test' })),
+        ...semExams.map((exam) => ({
+          ...exam,
+          examType: 'Sem Exam',
+          date: exam.exams[0]?.date,
+        })),
+      ];
+
+      // Sort combined exams by date
+      combinedExams.sort(
+        (a, b) =>
+          new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
+      );
+
+      return {
+        exams: combinedExams,
+        total:
+          (await this.classTestModel.countDocuments({ schoolId })) +
+          (await this.semExamModel.countDocuments({ schoolId })),
+      };
+    } catch (error) {
+      this.handleError(error, 'Failed to fetch offline exams for student');
     }
-    return classTest[0];
+  }
+
+  // New CRUD operations for SemExam
+  async getSemExam(id: string, schoolId: Types.ObjectId): Promise<any> {
+    try {
+      const exam = await this.semExamModel
+        .aggregate([
+          {
+            $match: {
+              _id: new Types.ObjectId(id),
+              schoolId: new Types.ObjectId(schoolId),
+            },
+          },
+          {
+            $lookup: {
+              from: 'classrooms',
+              localField: 'classId',
+              foreignField: '_id',
+              as: 'classroom',
+            },
+          },
+
+          {
+            $unwind: '$classroom',
+          },
+          {
+            $lookup: {
+              from: 'subjects',
+              localField: 'exams.subjectId',
+              foreignField: '_id',
+              as: 'subjects',
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              classId: '$classroom._id',
+              className: '$classroom.name',
+              exams: {
+                $map: {
+                  input: '$exams',
+                  as: 'exam',
+                  in: {
+                    _id: '$$exam._id',
+                    subjectId: '$$exam.subjectId',
+                    subjectName: {
+                      $let: {
+                        vars: {
+                          subject: {
+                            $arrayElemAt: [
+                              {
+                                $filter: {
+                                  input: '$subjects',
+                                  cond: {
+                                    $eq: ['$$this._id', '$$exam.subjectId'],
+                                  },
+                                },
+                              },
+                              0,
+                            ],
+                          },
+                        },
+                        in: '$$subject.name',
+                      },
+                    },
+                    date: '$$exam.date',
+                    startTime: '$$exam.startTime',
+                    endTime: '$$exam.endTime',
+                    description: '$$exam.description',
+                  },
+                },
+              },
+            },
+          },
+        ])
+        .exec();
+
+      if (!exam || exam.length === 0) {
+        throw new NotFoundException(`Semester exam with ID "${id}" not found`);
+      }
+
+      return exam[0];
+    } catch (error) {
+      this.handleError(error, `Failed to get semester exam with ID "${id}"`);
+    }
+  }
+
+  async updateSemExam(
+    id: string,
+    updateExamDto: UpdateSemExamDto,
+    schoolId: Types.ObjectId,
+  ): Promise<SemExam> {
+    try {
+      const updatedExam = await this.semExamModel
+        .findOneAndUpdate(
+          { _id: id, schoolId },
+          { $set: updateExamDto },
+          { new: true },
+        )
+        .exec();
+
+      if (!updatedExam) {
+        throw new NotFoundException(`Semester exam with ID "${id}" not found`);
+      }
+      return updatedExam;
+    } catch (error) {
+      this.handleError(error, `Failed to update semester exam with ID "${id}"`);
+    }
+  }
+
+  async deleteSemExam(id: string, schoolId: Types.ObjectId): Promise<void> {
+    try {
+      const result = await this.semExamModel
+        .deleteOne({ _id: id, schoolId })
+        .exec();
+      if (result.deletedCount === 0) {
+        throw new NotFoundException(`Semester exam with ID "${id}" not found`);
+      }
+    } catch (error) {
+      this.handleError(error, `Failed to delete semester exam with ID "${id}"`);
+    }
+  }
+
+  // New CRUD operations for ClassTest
+  async getClassTest(id: string, schoolId: Types.ObjectId) {
+    try {
+      const classTest = await this.classTestModel
+        .aggregate([
+          { $match: { _id: new Types.ObjectId(id), schoolId } },
+          {
+            $lookup: {
+              from: 'timetables',
+              let: { periods: '$periods', classId: '$classId' },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: { $eq: ['$classId', '$$classId'] },
+                  },
+                },
+                {
+                  $project: {
+                    allDays: {
+                      $objectToArray: {
+                        monday: '$monday',
+                        tuesday: '$tuesday',
+                        wednesday: '$wednesday',
+                        thursday: '$thursday',
+                        friday: '$friday',
+                        saturday: '$saturday',
+                      },
+                    },
+                  },
+                },
+                { $unwind: '$allDays' },
+                { $unwind: '$allDays.v' },
+                {
+                  $match: {
+                    $expr: { $in: ['$allDays.v._id', '$$periods'] },
+                  },
+                },
+                {
+                  $project: {
+                    _id: '$allDays.v._id',
+                    day: '$allDays.k',
+                    startTime: '$allDays.v.startTime',
+                    endTime: '$allDays.v.endTime',
+                    subjectId: '$allDays.v.subjectId',
+                    teacherId: '$allDays.v.teacherId',
+                  },
+                },
+              ],
+              as: 'timetableEntries',
+            },
+          },
+          {
+            $lookup: {
+              from: 'subjects',
+              localField: 'subjectId',
+              foreignField: '_id',
+              as: 'subject',
+            },
+          },
+          {
+            $lookup: {
+              from: 'classrooms',
+              localField: 'classId',
+              foreignField: '_id',
+              as: 'classroom',
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              date: 1,
+              subjectId: 1,
+              classId: 1,
+              periods: 1,
+              schoolId: 1,
+              createdAt: 1,
+              updatedAt: 1,
+              subject: { $arrayElemAt: ['$subject', 0] },
+              classroom: { $arrayElemAt: ['$classroom', 0] },
+              timetableEntries: 1,
+              description: 1,
+            },
+          },
+        ])
+        .exec();
+
+      if (!classTest || classTest.length === 0) {
+        throw new NotFoundException(`Class test with ID "${id}" not found`);
+      }
+      return classTest[0];
+    } catch (error) {
+      this.handleError(error, `Failed to get class test with ID "${id}"`);
+    }
   }
 
   async updateClassTest(
@@ -703,33 +727,153 @@ export class ExamService {
     updateExamDto: UpdateClassTestDto,
     schoolId: Types.ObjectId,
   ): Promise<ClassTest> {
-    updateExamDto.periods = updateExamDto.periods.map(
-      (x) => new Types.ObjectId(x)
-    );
-    updateExamDto.subjectId = new Types.ObjectId(updateExamDto.subjectId)
-    if (updateExamDto.classId) {
-      delete updateExamDto.classId;
-    }
-    const updatedClassTest = await this.classTestModel
-      .findOneAndUpdate(
-        { _id: id, schoolId },
-        { $set: updateExamDto },
-        { new: true },
-      )
-      .exec();
+    try {
+      updateExamDto.periods = updateExamDto.periods.map(
+        (x) => new Types.ObjectId(x)
+      );
+      updateExamDto.subjectId = new Types.ObjectId(updateExamDto.subjectId)
+      if (updateExamDto.classId) {
+        delete updateExamDto.classId;
+      }
+      const updatedClassTest = await this.classTestModel
+        .findOneAndUpdate(
+          { _id: id, schoolId },
+          { $set: updateExamDto },
+          { new: true },
+        )
+        .exec();
 
-    if (!updatedClassTest) {
-      throw new NotFoundException(`Class test with ID "${id}" not found`);
+      if (!updatedClassTest) {
+        throw new NotFoundException(`Class test with ID "${id}" not found`);
+      }
+      return updatedClassTest;
+    } catch (error) {
+      this.handleError(error, `Failed to update class test with ID "${id}"`);
     }
-    return updatedClassTest;
   }
 
   async deleteClassTest(id: string, schoolId: Types.ObjectId): Promise<void> {
-    const result = await this.classTestModel
-      .deleteOne({ _id: id, schoolId })
-      .exec();
-    if (result.deletedCount === 0) {
-      throw new NotFoundException(`Class test with ID "${id}" not found`);
+    try {
+      const result = await this.classTestModel
+        .deleteOne({ _id: id, schoolId })
+        .exec();
+      if (result.deletedCount === 0) {
+        throw new NotFoundException(`Class test with ID "${id}" not found`);
+      }
+    } catch (error) {
+      this.handleError(error, `Failed to delete class test with ID "${id}"`);
     }
+  }
+
+  async createResult(createResultDto: CreateResultDto, schoolId: Types.ObjectId): Promise<Result> {
+    try {
+      const existingResult = await this.resultModel.findOne({
+        studentId: new Types.ObjectId(createResultDto.studentId),
+        examId: new Types.ObjectId(createResultDto.examId),
+        subjectId: new Types.ObjectId(createResultDto.subjectId),
+        schoolId: new Types.ObjectId(schoolId),
+      });
+
+      if (existingResult) {
+        throw new BadRequestException('A result for this student, exam, and subject already exists');
+      }
+
+      const newResult = new this.resultModel({
+        ...createResultDto,
+        studentId: new Types.ObjectId(createResultDto.studentId),
+        examId: new Types.ObjectId(createResultDto.examId),
+        subjectId: new Types.ObjectId(createResultDto.subjectId),
+        schoolId: new Types.ObjectId(schoolId),
+      });
+
+      return newResult.save();
+    } catch (error) {
+      this.handleError(error, 'Failed to create result');
+    }
+  }
+
+  async getExistingResult(studentId: Types.ObjectId, examId: Types.ObjectId, subjectId: Types.ObjectId, schoolId: Types.ObjectId): Promise<Result | null> {
+    try {
+      return this.resultModel.findOne({
+        studentId,
+        examId,
+        subjectId,
+        schoolId,
+      }).exec();
+    } catch (error) {
+      this.handleError(error, 'Failed to get existing result');
+    }
+  }
+
+  async getExistingResultOfStudent(studentId: Types.ObjectId, examId: Types.ObjectId, schoolId: Types.ObjectId) {
+    try {
+      const results = await this.resultModel.aggregate([
+        {
+          $match: {
+            studentId: studentId,
+            examId:new Types.ObjectId(examId),
+            schoolId: new Types.ObjectId(schoolId),
+          }
+        },
+        {
+          $lookup: {
+            from: 'subjects',
+            localField: 'subjectId',
+            foreignField: '_id',
+            as: 'subjectDetails'
+          }
+        },
+        {
+          $unwind: '$subjectDetails'
+        },
+        {
+          $lookup: {
+            from: 'classTests',
+            localField: 'examId',
+            foreignField: '_id',
+            as: 'classTestDetails'
+          }
+        },
+        {
+          $lookup: {
+            from: 'semExams',
+            localField: 'examId',
+            foreignField: '_id',
+            as: 'semExamDetails'
+          }
+        },
+        {
+          $addFields: {
+            examDetails: {
+              $cond: {
+                if: { $gt: [{ $size: '$classTestDetails' }, 0] },
+                then: { $arrayElemAt: ['$classTestDetails', 0] },
+                else: { $arrayElemAt: ['$semExamDetails', 0] }
+              }
+            }
+          }
+        },
+        {
+          $project: {
+            classTestDetails: 0,
+            semExamDetails: 0
+          }
+        }
+      ]);
+      return results;
+    } catch (error) {
+      this.handleError(error, 'Failed to get existing result of student');
+    }
+  }
+
+  private handleError(error: any, message: string): never {
+    console.error(error);
+    if (error instanceof NotFoundException) {
+      throw error;
+    }
+    if (error instanceof BadRequestException) {
+      throw error;
+    }
+    throw new InternalServerErrorException(message);
   }
 }

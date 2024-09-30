@@ -49,6 +49,9 @@ export class User extends Document {
 
   @Prop({ type: Boolean, default: true })
   isActive: boolean;
+
+  @Prop({ type: [String], required: false })
+  fcmToken: string[];
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
