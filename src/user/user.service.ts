@@ -48,30 +48,34 @@ export class UserService {
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const numbers = '0123456789';
     let username = '';
-    
+
     // Generate 2 random capital letters
     for (let i = 0; i < 2; i++) {
       username += letters.charAt(Math.floor(Math.random() * letters.length));
     }
-    
+
     // Generate 4 random numbers
     for (let i = 0; i < 4; i++) {
       username += numbers.charAt(Math.floor(Math.random() * numbers.length));
     }
-    
+
     return username;
   }
 
   private generatePassword(): string {
     const length = 10;
-    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
-    let password = "";
+    const charset =
+      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+';
+    let password = '';
     for (let i = 0; i < length; i++) {
       password += charset.charAt(Math.floor(Math.random() * charset.length));
     }
     return password;
   }
-  async createUniqueUserCredentials(): Promise<{ username: string, password: string }> {
+  async createUniqueUserCredentials(): Promise<{
+    username: string;
+    password: string;
+  }> {
     let username: string;
     let isUnique = false;
 
@@ -99,8 +103,14 @@ export class UserService {
       }
 
       // Validate roles
-      if (!Array.isArray(createUserDto.roles) || createUserDto.roles.length === 0) {
-        throw new CustomError(HttpStatus.BAD_REQUEST, 'At least one role must be specified');
+      if (
+        !Array.isArray(createUserDto.roles) ||
+        createUserDto.roles.length === 0
+      ) {
+        throw new CustomError(
+          HttpStatus.BAD_REQUEST,
+          'At least one role must be specified',
+        );
       }
 
       // Handle STUDENT role
@@ -111,15 +121,21 @@ export class UserService {
       // Validate SUPERADMIN creation
       if (createUserDto.roles.includes(UserRole.SUPERADMIN)) {
         if (schoolId) {
-          throw new CustomError(HttpStatus.BAD_REQUEST, 'Only super admin can create super admin');
+          throw new CustomError(
+            HttpStatus.BAD_REQUEST,
+            'Only super admin can create super admin',
+          );
         }
         if (!createUserDto.schoolId) {
-          throw new CustomError(HttpStatus.BAD_REQUEST, 'School Id is required for super admin');
+          throw new CustomError(
+            HttpStatus.BAD_REQUEST,
+            'School Id is required for super admin',
+          );
         }
       }
-      console.log(createUserDto)
+      console.log(createUserDto);
       const { username, password } = await this.createUniqueUserCredentials();
-      console.log({ username, password })
+      console.log({ username, password });
       const hashedPassword = await bcrypt.hash(password, 10);
 
       const createdUser = new this.userModel({
@@ -129,9 +145,11 @@ export class UserService {
         schoolId: createUserDto.roles.includes(UserRole.SUPERADMIN)
           ? undefined
           : schoolId,
-        classId: createUserDto.roles.includes(UserRole.STUDENT) && createUserDto.classId
-          ? new Types.ObjectId(createUserDto.classId)
-          : undefined,
+        classId:
+          createUserDto.roles.includes(UserRole.STUDENT) &&
+          createUserDto.classId
+            ? new Types.ObjectId(createUserDto.classId)
+            : undefined,
       });
 
       const savedUser = await createdUser.save({ session });
@@ -150,7 +168,7 @@ export class UserService {
       if (session) {
         await session.commitTransaction();
       }
-      return "User Created";
+      return 'User Created';
     } catch (error) {
       if (session) {
         await session.abortTransaction();
@@ -162,7 +180,10 @@ export class UserService {
         throw new CustomError(HttpStatus.BAD_REQUEST, 'Email already exists');
       }
       console.error('Failed to create user:', error);
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to create user');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to create user',
+      );
     } finally {
       if (session) {
         await session.endSession();
@@ -171,7 +192,11 @@ export class UserService {
   }
 
   // Helper methods for creating role-specific documents
-  private async createStaffDocument(user: User, dto: CreateUserDto, session: ClientSession | null) {
+  private async createStaffDocument(
+    user: User,
+    dto: CreateUserDto,
+    session: ClientSession | null,
+  ) {
     const staffData = {
       userId: user._id,
       firstName: dto.firstName,
@@ -183,6 +208,7 @@ export class UserService {
       email: dto.email,
       address: dto.address,
       joinDate: dto.joinDate,
+      bloodGroup: dto.bloodGroup,
       department: dto.department,
       position: dto.position,
       qualifications: dto.qualifications,
@@ -199,11 +225,17 @@ export class UserService {
     await createdStaff.save({ session });
   }
 
-  private async createTeacherDocument(user: User, dto: CreateUserDto, session: ClientSession | null) {
+  private async createTeacherDocument(
+    user: User,
+    dto: CreateUserDto,
+    session: ClientSession | null,
+  ) {
     try {
       const teacherData = {
         userId: user._id,
-        subjects: dto.subjects ? dto.subjects.map(x => new Types.ObjectId(x)) : [],
+        subjects: dto.subjects
+          ? dto.subjects.map((x) => new Types.ObjectId(x))
+          : [],
       };
       const createdTeacher = new this.teacherModel(teacherData);
       await createdTeacher.save({ session });
@@ -212,37 +244,43 @@ export class UserService {
     }
   }
 
-  private async createStudentDocument(user: User, dto: CreateUserDto, session: ClientSession | null) {
-    try{
-
+  private async createStudentDocument(
+    user: User,
+    dto: CreateUserDto,
+    session: ClientSession | null,
+  ) {
+    try {
       const studentData = {
         userId: user._id,
-      email:dto.email,
-      firstName: dto.firstName,
-      lastName: dto.lastName,
-      dateOfBirth: dto.dateOfBirth,
-      gender: dto.gender,
-      nationality: dto.nationality,
-      contactNumber: dto.contactNumber,
-      address: dto.address,
-      joinDate: dto.joinDate,
-      enrollmentNumber: dto.enrollmentNumber,
-      classId: new Types.ObjectId(dto.classId),
-      parentsDetails: dto.parentsDetails,
-      adhaarNumber: dto.adhaarNumber,
-      emergencyContactName: dto.emergencyContactName,
-      emergencyContactNumber: dto.emergencyContactNumber,
-      adhaarDocument: dto.adhaarDocument,
-      state: dto.state,
-      birthCertificateDocument: dto.birthCertificateDocument,
-      tcNumber: dto.tcNumber,
-      tcDocument: dto.tcDocument
-    };
-    const createdStudent = new this.studentModel(studentData);
-    await createdStudent.save({ session });
-  }catch(err){
-    throw err
-  }
+        email: dto.email,
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        dateOfBirth: dto.dateOfBirth,
+        gender: dto.gender,
+        nationality: dto.nationality,
+        contactNumber: dto.contactNumber,
+        address: dto.address,
+        joinDate: dto.joinDate,
+        bloodGroup: dto.bloodGroup,
+        extraCurricular: dto.extraCurricular,
+        remarks: dto.remarks,
+        enrollmentNumber: dto.enrollmentNumber,
+        classId: new Types.ObjectId(dto.classId),
+        parentsDetails: dto.parentsDetails,
+        adhaarNumber: dto.adhaarNumber,
+        emergencyContactName: dto.emergencyContactName,
+        emergencyContactNumber: dto.emergencyContactNumber,
+        adhaarDocument: dto.adhaarDocument,
+        state: dto.state,
+        birthCertificateDocument: dto.birthCertificateDocument,
+        tcNumber: dto.tcNumber,
+        tcDocument: dto.tcDocument,
+      };
+      const createdStudent = new this.studentModel(studentData);
+      await createdStudent.save({ session });
+    } catch (err) {
+      throw err;
+    }
   }
 
   async findAll(
@@ -261,16 +299,16 @@ export class UserService {
         session = await this.connection.startSession();
         session.startTransaction();
       }
-      
+
       roles = Array.isArray(roles) ? roles : [roles];
       const query: any = { roles: { $in: roles }, schoolId, isActive: true };
 
       // Add search functionality
       if (search) {
         query.$or = [
-          { 'firstName': { $regex: search, $options: 'i' } },
-          { 'lastName': { $regex: search, $options: 'i' } },
-          { 'contactNumber': { $regex: search, $options: 'i' } },
+          { firstName: { $regex: search, $options: 'i' } },
+          { lastName: { $regex: search, $options: 'i' } },
+          { contactNumber: { $regex: search, $options: 'i' } },
         ];
       }
 
@@ -360,7 +398,10 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch users');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to fetch users',
+      );
     } finally {
       if (session) {
         session.endSession();
@@ -375,7 +416,13 @@ export class UserService {
     try {
       roles =
         typeof roles === 'undefined'
-          ? [UserRole.ADMIN, UserRole.TEACHER, UserRole.ACCOUNTANT,UserRole.ADMISSION_TEAM,UserRole.HR]
+          ? [
+              UserRole.ADMIN,
+              UserRole.TEACHER,
+              UserRole.ACCOUNTANT,
+              UserRole.ADMISSION_TEAM,
+              UserRole.HR,
+            ]
           : Array.isArray(roles)
             ? roles
             : [roles];
@@ -388,7 +435,7 @@ export class UserService {
           },
         },
         {
-          $unwind: '$roles'
+          $unwind: '$roles',
         },
         {
           $group: {
@@ -412,7 +459,10 @@ export class UserService {
       return countByRole;
     } catch (err) {
       console.log(err);
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch user counts');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to fetch user counts',
+      );
     }
   }
 
@@ -432,42 +482,78 @@ export class UserService {
         .lean();
 
       if (!user) {
-        throw new CustomError(HttpStatus.NOT_FOUND, `User with ID ${id} not found`);
+        throw new CustomError(
+          HttpStatus.NOT_FOUND,
+          `User with ID ${id} not found`,
+        );
       }
 
       // Fetch additional details based on user roles
       if (user.roles.includes(UserRole.STUDENT)) {
-        const studentDetails = await this.studentModel.findOne({
-          userId: user._id,
-        }).session(session).lean();
-        const classroom = await this.classModel.findOne({_id:user.classId,isActive:true})
+        const studentDetails = await this.studentModel
+          .findOne({
+            userId: user._id,
+          })
+          .session(session)
+          .lean();
+        const [classroom] = await this.classModel.aggregate([
+          { $match: { _id: user.classId, isActive: true } },
+          {
+            $lookup: {
+              from: 'subjects',
+              localField: 'subjects',
+              foreignField: '_id',
+              as: 'subjects',
+            },
+          },
+          {
+            $lookup: {
+              from: 'teachers',
+              localField: 'classTeacherId',
+              foreignField: 'userId',
+              as: 'classTeacher',
+            },
+          }
+        ]);
 
-        user = { ...user, ...studentDetails,classroom };
+        user = { ...user, ...studentDetails, classroom };
       } else {
         // For non-student roles (STAFF, TEACHER, etc.)
-        const staffDetails = await this.staffModel.findOne({
-          userId: user._id,
-        }).session(session).lean();
+        const staffDetails = await this.staffModel
+          .findOne({
+            userId: user._id,
+          })
+          .session(session)
+          .lean();
         user = { ...user, ...staffDetails };
 
         if (user.roles.includes(UserRole.TEACHER)) {
-          const teacherDetails = await this.teacherModel.findOne({
-            userId: user.userId,
-          }).session(session).lean();
-          
+          const teacherDetails = await this.teacherModel
+            .findOne({
+              userId: user.userId,
+            })
+            .session(session)
+            .lean();
+
           if (teacherDetails) {
             // Fetch subject details
             const subjectIds = teacherDetails.subjects || [];
-            const subjects = await this.subjectModel.find({
-              _id: { $in: subjectIds }
-            }).session(session).lean();
-            const classroom =await this.classModel.findOne({classTeacherId:user.userId,isActive:true})
-            
-            user = { 
-              ...user, 
-              ...teacherDetails, 
+            const subjects = await this.subjectModel
+              .find({
+                _id: { $in: subjectIds },
+              })
+              .session(session)
+              .lean();
+            const classroom = await this.classModel.findOne({
+              classTeacherId: user.userId,
+              isActive: true,
+            });
+
+            user = {
+              ...user,
+              ...teacherDetails,
               subjects: subjects,
-              classroom 
+              classroom,
             };
           } else {
             user.subjects = [];
@@ -486,7 +572,10 @@ export class UserService {
       if (error instanceof CustomError) {
         throw error;
       }
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch user');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to fetch user',
+      );
     } finally {
       if (session) {
         session.endSession();
@@ -508,8 +597,14 @@ export class UserService {
       }
 
       // Validate roles
-      if (!Array.isArray(updateUserDto.roles) || updateUserDto.roles.length === 0) {
-        throw new CustomError(HttpStatus.BAD_REQUEST, 'At least one role must be specified');
+      if (
+        !Array.isArray(updateUserDto.roles) ||
+        updateUserDto.roles.length === 0
+      ) {
+        throw new CustomError(
+          HttpStatus.BAD_REQUEST,
+          'At least one role must be specified',
+        );
       }
 
       // Handle STUDENT role
@@ -517,21 +612,26 @@ export class UserService {
         updateUserDto.roles = [UserRole.STUDENT];
       }
 
-      const updatedUser = await this.userModel.findOneAndUpdate(
-        { _id: new Types.ObjectId(id), schoolId },
-        {
-          $set: {
-            roles: updateUserDto.roles,
-            classId: updateUserDto.roles.includes(UserRole.STUDENT)
-              ? new Types.ObjectId(updateUserDto.classId)
-              : undefined,
+      const updatedUser = await this.userModel
+        .findOneAndUpdate(
+          { _id: new Types.ObjectId(id), schoolId },
+          {
+            $set: {
+              roles: updateUserDto.roles,
+              classId: updateUserDto.roles.includes(UserRole.STUDENT)
+                ? new Types.ObjectId(updateUserDto.classId)
+                : undefined,
+            },
           },
-        },
-        { new: true, session },
-      ).exec();
+          { new: true, session },
+        )
+        .exec();
 
       if (!updatedUser) {
-        throw new CustomError(HttpStatus.NOT_FOUND, `User with ID ${id} not found`);
+        throw new CustomError(
+          HttpStatus.NOT_FOUND,
+          `User with ID ${id} not found`,
+        );
       }
 
       // Update role-specific documents
@@ -557,7 +657,10 @@ export class UserService {
         throw error;
       }
       console.error('Failed to update user:', error);
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to update user');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to update user',
+      );
     } finally {
       if (session) {
         session.endSession();
@@ -566,7 +669,11 @@ export class UserService {
   }
 
   // Helper methods for updating role-specific documents
-  private async updateStaffDocument(user: User, dto: UpdateUserDto, session: ClientSession | null) {
+  private async updateStaffDocument(
+    user: User,
+    dto: UpdateUserDto,
+    session: ClientSession | null,
+  ) {
     const staffData = {
       userId: user._id,
       firstName: dto.firstName,
@@ -593,23 +700,31 @@ export class UserService {
     await this.staffModel.findOneAndUpdate(
       { userId: user._id },
       { $set: staffData },
-      { upsert: true, new: true, session }
+      { upsert: true, new: true, session },
     );
   }
 
-  private async updateTeacherDocument(user: User, dto: UpdateUserDto, session: ClientSession | null) {
+  private async updateTeacherDocument(
+    user: User,
+    dto: UpdateUserDto,
+    session: ClientSession | null,
+  ) {
     const teacherData = {
       userId: user._id,
-      subjects: dto.subjects?.map(x => new Types.ObjectId(x.toString())),
+      subjects: dto.subjects?.map((x) => new Types.ObjectId(x.toString())),
     };
     await this.teacherModel.findOneAndUpdate(
       { userId: user._id },
       { $set: teacherData },
-      { upsert: true, new: true, session }
+      { upsert: true, new: true, session },
     );
   }
 
-  private async updateStudentDocument(user: User, dto: UpdateUserDto, session: ClientSession | null) {
+  private async updateStudentDocument(
+    user: User,
+    dto: UpdateUserDto,
+    session: ClientSession | null,
+  ) {
     const studentData = {
       userId: user._id,
       firstName: dto.firstName,
@@ -635,9 +750,8 @@ export class UserService {
     await this.studentModel.findOneAndUpdate(
       { userId: user._id },
       { $set: studentData },
-      { upsert: true, new: true, session }
+      { upsert: true, new: true, session },
     );
-
   }
 
   async remove(id: string, schoolId): Promise<void> {
@@ -649,10 +763,16 @@ export class UserService {
         session = await this.connection.startSession();
         session.startTransaction();
       }
-      const isClassTeacher = await this.classModel.findOne({classTeacherId:new Types.ObjectId(id),isActive:true})
+      const isClassTeacher = await this.classModel.findOne({
+        classTeacherId: new Types.ObjectId(id),
+        isActive: true,
+      });
 
       if (isClassTeacher) {
-        throw new CustomError(HttpStatus.BAD_REQUEST, `Cannot remove user. This teacher is the class teacher of ${isClassTeacher.name}. Please change the class teacher or make the class inactive before removing this user.`);
+        throw new CustomError(
+          HttpStatus.BAD_REQUEST,
+          `Cannot remove user. This teacher is the class teacher of ${isClassTeacher.name}. Please change the class teacher or make the class inactive before removing this user.`,
+        );
       }
 
       const result = await this.userModel
@@ -663,7 +783,10 @@ export class UserService {
         .session(session)
         .exec();
       if (!result) {
-        throw new CustomError(HttpStatus.NOT_FOUND, `User with ID ${id} not found`);
+        throw new CustomError(
+          HttpStatus.NOT_FOUND,
+          `User with ID ${id} not found`,
+        );
       }
 
       if (session) {
@@ -676,7 +799,10 @@ export class UserService {
       if (error instanceof CustomError) {
         throw error;
       }
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to remove user');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to remove user',
+      );
     } finally {
       if (session) {
         session.endSession();
@@ -706,7 +832,10 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to create student');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to create student',
+      );
     } finally {
       if (session) {
         session.endSession();
@@ -734,7 +863,10 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch students');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to fetch students',
+      );
     } finally {
       if (session) {
         session.endSession();
@@ -757,7 +889,10 @@ export class UserService {
         .session(session)
         .exec();
       if (!student) {
-        throw new CustomError(HttpStatus.NOT_FOUND, `Student with ID ${id} not found`);
+        throw new CustomError(
+          HttpStatus.NOT_FOUND,
+          `Student with ID ${id} not found`,
+        );
       }
 
       if (session) {
@@ -771,7 +906,10 @@ export class UserService {
       if (error instanceof CustomError) {
         throw error;
       }
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch student');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to fetch student',
+      );
     } finally {
       if (session) {
         session.endSession();
@@ -796,7 +934,10 @@ export class UserService {
         .findByIdAndUpdate(id, updateStudentDto, { new: true, session })
         .exec();
       if (!updatedStudent) {
-        throw new CustomError(HttpStatus.NOT_FOUND, `Student with ID ${id} not found`);
+        throw new CustomError(
+          HttpStatus.NOT_FOUND,
+          `Student with ID ${id} not found`,
+        );
       }
 
       if (session) {
@@ -810,7 +951,10 @@ export class UserService {
       if (error instanceof CustomError) {
         throw error;
       }
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to update student');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to update student',
+      );
     } finally {
       if (session) {
         session.endSession();
@@ -833,7 +977,10 @@ export class UserService {
         .session(session)
         .exec();
       if (!result) {
-        throw new CustomError(HttpStatus.NOT_FOUND, `Student with ID ${id} not found`);
+        throw new CustomError(
+          HttpStatus.NOT_FOUND,
+          `Student with ID ${id} not found`,
+        );
       }
 
       if (session) {
@@ -846,7 +993,10 @@ export class UserService {
       if (error instanceof CustomError) {
         throw error;
       }
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to remove student');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to remove student',
+      );
     } finally {
       if (session) {
         session.endSession();
@@ -876,7 +1026,10 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to create employee');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to create employee',
+      );
     } finally {
       if (session) {
         session.endSession();
@@ -904,7 +1057,10 @@ export class UserService {
       if (session) {
         await session.abortTransaction();
       }
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch employees');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to fetch employees',
+      );
     } finally {
       if (session) {
         session.endSession();
@@ -927,7 +1083,10 @@ export class UserService {
         .session(session)
         .exec();
       if (!employee) {
-        throw new CustomError(HttpStatus.NOT_FOUND, `any with ID ${id} not found`);
+        throw new CustomError(
+          HttpStatus.NOT_FOUND,
+          `any with ID ${id} not found`,
+        );
       }
 
       if (session) {
@@ -941,7 +1100,10 @@ export class UserService {
       if (error instanceof CustomError) {
         throw error;
       }
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch employee');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to fetch employee',
+      );
     } finally {
       if (session) {
         session.endSession();
@@ -966,7 +1128,10 @@ export class UserService {
         .findByIdAndUpdate(id, updateEmployeeDto, { new: true, session })
         .exec();
       if (!updatedEmployee) {
-        throw new CustomError(HttpStatus.NOT_FOUND, `any with ID ${id} not found`);
+        throw new CustomError(
+          HttpStatus.NOT_FOUND,
+          `any with ID ${id} not found`,
+        );
       }
 
       if (session) {
@@ -980,7 +1145,10 @@ export class UserService {
       if (error instanceof CustomError) {
         throw error;
       }
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to update employee');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to update employee',
+      );
     } finally {
       if (session) {
         session.endSession();
@@ -1003,7 +1171,10 @@ export class UserService {
         .session(session)
         .exec();
       if (!result) {
-        throw new CustomError(HttpStatus.NOT_FOUND, `any with ID ${id} not found`);
+        throw new CustomError(
+          HttpStatus.NOT_FOUND,
+          `any with ID ${id} not found`,
+        );
       }
 
       if (session) {
@@ -1016,13 +1187,14 @@ export class UserService {
       if (error instanceof CustomError) {
         throw error;
       }
-      throw new CustomError(HttpStatus.INTERNAL_SERVER_ERROR, 'Failed to remove employee');
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to remove employee',
+      );
     } finally {
       if (session) {
         session.endSession();
       }
     }
   }
-
- 
 }
