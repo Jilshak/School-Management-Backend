@@ -161,6 +161,12 @@ export class CreateUserDto {
   @IsString({ each: true })
   extraCurricular?: string[];
 
+  @ApiProperty({ example: ['Swimming', 'Chess'], description: 'List of extracurricular activities', type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  achievements?: string[];
+
   @ApiProperty({ example: "Remarks" })
   @IsOptional()
   @IsString()

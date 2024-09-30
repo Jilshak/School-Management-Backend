@@ -31,6 +31,9 @@ export class Student extends Document {
   @Prop({type:[String],required:false})
   extraCurricular: string[];
 
+  @Prop({type:[String],required:false})
+  achievements: string[];
+
   @Prop({type:String,required:false})
   remarks: string;
 
