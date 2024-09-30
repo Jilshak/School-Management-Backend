@@ -19,47 +19,76 @@ export class AttendanceService {
     @InjectModel(Classroom.name) private classroomModel: Model<Classroom>,
   ) {}
 
-  async create(
-    createAttendanceDto: CreateAttendanceDto,
-    schoolId: Types.ObjectId,
-  ): Promise<Attendance | null> {
-    try {
-      const {
-        classId,
-        teacherId,
-        attendanceDate,
-        studentsAttendance,
-        ...rest
-      } = createAttendanceDto;
+async create(
+  createAttendanceDto: CreateAttendanceDto,
+  schoolId: Types.ObjectId,
+): Promise<Attendance> {
+  try {
+    const {
+      classId,
+      teacherId,
+      attendanceDate,
+      studentsAttendance,
+      ...rest
+    } = createAttendanceDto;
 
-      // Check if attendance for this class and date already exists
-      const existingAttendance = await this.attendanceModel.findOne({
-        classId: new Types.ObjectId(classId),
-        attendanceDate: new Date(attendanceDate),
-      });
+    const dateToCompare = new Date(attendanceDate);
+    dateToCompare.setHours(0, 0, 0, 0);
 
-      if (existingAttendance) {
-        // Attendance for today already exists, return null
-        return null;
-      }
+    const filter = {
+      classId: new Types.ObjectId(classId),
+      schoolId,
+      attendanceDate: {
+        $gte: dateToCompare,
+        $lt: new Date(dateToCompare.getTime() + 24 * 60 * 60 * 1000),
+      },
+    };
 
-      const newAttendance = new this.attendanceModel({
+    const update = {
+      $set: {
         ...rest,
-        attendanceDate,
-        classId: new Types.ObjectId(classId),
+        attendanceDate: dateToCompare,
         teacherId: new Types.ObjectId(teacherId),
-        schoolId,
-        studentsAttendance: studentsAttendance.map((student) => ({
-          ...student,
-          studentId: new Types.ObjectId(student.studentId),
-        })),
-      });
+      },
+    };
 
-      return await newAttendance.save();
-    } catch (err) {
-      throw err;
+    const options = {
+      new: true,
+      upsert: true,
+    };
+
+    const updatedAttendance = await this.attendanceModel.findOneAndUpdate(filter, update, options);
+
+    // If the document was just created or studentsAttendance is empty, set the studentsAttendance
+    if (!updatedAttendance.studentsAttendance || updatedAttendance.studentsAttendance.length === 0) {
+      updatedAttendance.studentsAttendance = studentsAttendance.map(student => ({
+        ...student,
+        studentId: new Types.ObjectId(student.studentId),
+        remark: student.remark || '' // Ensure remark is always present
+      }));
+    } else {
+      // Update existing studentsAttendance
+      updatedAttendance.studentsAttendance = updatedAttendance.studentsAttendance.map(existingStudent => {
+        const updatedStudent = studentsAttendance.find(s => s.studentId.toString() === existingStudent.studentId.toString());
+        if (updatedStudent) {
+          return {
+            ...existingStudent,
+            status: updatedStudent.status,
+            remark: updatedStudent.remark || existingStudent.remark || ''
+          };
+        }
+        return existingStudent;
+      });
     }
+
+    // Save the changes
+    await updatedAttendance.save();
+
+    return updatedAttendance;
+  } catch (err) {
+    throw err;
   }
+}
 
   async findAll(classId: string,month:Date = new Date()): Promise<any[]> {
     try {
@@ -327,128 +356,49 @@ export class AttendanceService {
   async updateByStudent(
     studentId: string,
     schoolId: Types.ObjectId,
-    attendanceUpdates: { date: Date; status: string }[],
+    attendanceUpdates: { date: Date; status: string; remark?: string }[],
   ): Promise<any> {
     try {
       const studentObjectId = new Types.ObjectId(studentId);
 
-      const result = await this.studentModel.aggregate([
-        // Match the student by userId
-        { $match: { userId: studentObjectId } },
+      for (const update of attendanceUpdates) {
+        const startOfDay = new Date(update.date);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(update.date);
+        endOfDay.setHours(23, 59, 59, 999);
 
-        // Lookup and unwind the user document
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'userId',
-            foreignField: '_id',
-            as: 'user',
-          },
-        },
-        { $unwind: '$user' },
-
-        // Match the school
-        { $match: { 'user.schoolId': schoolId } },
-
-        // Lookup and update attendance records
-        {
-          $lookup: {
-            from: 'attendances',
-            let: { classId: '$user.classId', studentId: '$_id' },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $and: [
-                      { $eq: ['$classId', '$$classId'] },
-                      { $in: ['$$studentId', '$studentsAttendance.studentId'] },
-                      {
-                        $in: [
-                          '$attendanceDate',
-                          attendanceUpdates.map((update) => update.date),
-                        ],
-                      },
-                    ],
-                  },
-                },
-              },
-              {
-                $addFields: {
-                  studentsAttendance: {
-                    $map: {
-                      input: '$studentsAttendance',
-                      as: 'sa',
-                      in: {
-                        $cond: [
-                          { $eq: ['$$sa.studentId', '$$studentId'] },
-                          {
-                            $mergeObjects: [
-                              '$$sa',
-                              {
-                                status: {
-                                  $arrayElemAt: [
-                                    attendanceUpdates.map(
-                                      (update) => update.status,
-                                    ),
-                                    {
-                                      $indexOfArray: [
-                                        attendanceUpdates.map(
-                                          (update) => update.date,
-                                        ),
-                                        '$attendanceDate',
-                                      ],
-                                    },
-                                  ],
-                                },
-                              },
-                            ],
-                          },
-                          '$$sa',
-                        ],
-                      },
-                    },
-                  },
-                },
-              },
-              {
-                $project: {
-                  _id: 1,
-                  studentsAttendance: 1,
-                },
-              },
-            ],
-            as: 'updatedAttendance',
-          },
-        },
-
-        // Project the final result
-        {
-          $project: {
-            student: {
-              id: '$userId', // Change this to userId
-              name: { $concat: ['$firstName', ' ', '$lastName'] },
-              enrollmentNumber: '$enrollmentNumber',
-            },
-            updatedAttendance: 1,
-          },
-        },
-      ]);
-
-      // Manually update the attendance records
-      for (const doc of result[0].updatedAttendance) {
         await this.attendanceModel.updateOne(
-          { _id: doc._id },
-          { $set: { studentsAttendance: doc.studentsAttendance } },
+          {
+            schoolId: schoolId,
+            attendanceDate: { $gte: startOfDay, $lte: endOfDay },
+            'studentsAttendance.studentId': studentObjectId
+          },
+          {
+            $set: {
+              'studentsAttendance.$.status': update.status,
+              'studentsAttendance.$.remark': update.remark || ''
+            }
+          }
         );
       }
 
-      if (result.length === 0) {
-        throw new NotFoundException(
-          'Student not found or attendance records not updated',
-        );
-      }
+      // Fetch and return the updated attendance records
+      const updatedRecords = await this.attendanceModel.find({
+        schoolId: schoolId,
+        'studentsAttendance.studentId': studentObjectId,
+        attendanceDate: {
+          $in: attendanceUpdates.map(update => new Date(update.date))
+        }
+      }).lean();
 
-      return result[0];
+      return {
+        studentId: studentId,
+        updatedAttendance: updatedRecords.map(record => ({
+          date: record.attendanceDate,
+          status: record.studentsAttendance.find(sa => sa.studentId.toString() === studentId)?.status,
+          remark: record.studentsAttendance.find(sa => sa.studentId.toString() === studentId)?.remark
+        }))
+      };
     } catch (err) {
       throw err;
     }
