@@ -486,13 +486,12 @@ export class UserService {
 
       // Fetch additional details based on user roles
       if (user.roles.includes(UserRole.STUDENT)) {
-        const studentDetails = await this.studentModel
-          .findOne({
-            userId: user._id,
-          })
-          .session(session)
-          .lean();
-        user = { ...user, ...studentDetails };
+        const studentDetails = await this.studentModel.findOne({
+          userId: user._id,
+        }).session(session).lean();
+        const classroom = await this.classModel.findOne({classTeacherId:user.classId,isActive:true})
+
+        user = { ...user, ...studentDetails,classroom };
       } else {
         // For non-student roles (STAFF, TEACHER, etc.)
         const staffDetails = await this.staffModel
@@ -504,27 +503,23 @@ export class UserService {
         user = { ...user, ...staffDetails };
 
         if (user.roles.includes(UserRole.TEACHER)) {
-          const teacherDetails = await this.teacherModel
-            .findOne({
-              userId: user._id,
-            })
-            .session(session)
-            .lean();
-
+          const teacherDetails = await this.teacherModel.findOne({
+            userId: user.userId,
+          }).session(session).lean();
+          
           if (teacherDetails) {
             // Fetch subject details
             const subjectIds = teacherDetails.subjects || [];
-            const subjects = await this.subjectModel
-              .find({
-                _id: { $in: subjectIds },
-              })
-              .session(session)
-              .lean();
-
-            user = {
-              ...user,
-              ...teacherDetails,
+            const subjects = await this.subjectModel.find({
+              _id: { $in: subjectIds }
+            }).session(session).lean();
+            const classroom =await this.classModel.findOne({classTeacherId:user.userId,isActive:true})
+            
+            user = { 
+              ...user, 
+              ...teacherDetails, 
               subjects: subjects,
+              classroom 
             };
           } else {
             user.subjects = [];
@@ -583,21 +578,18 @@ export class UserService {
         updateUserDto.roles = [UserRole.STUDENT];
       }
 
-      const updatedUser = await this.userModel
-        .findOneAndUpdate(
-          { _id: new Types.ObjectId(id), schoolId },
-          {
-            $set: {
-              email: updateUserDto.email,
-              roles: updateUserDto.roles,
-              classId: updateUserDto.roles.includes(UserRole.STUDENT)
-                ? new Types.ObjectId(updateUserDto.classId)
-                : undefined,
-            },
+      const updatedUser = await this.userModel.findOneAndUpdate(
+        { _id: new Types.ObjectId(id), schoolId },
+        {
+          $set: {
+            roles: updateUserDto.roles,
+            classId: updateUserDto.roles.includes(UserRole.STUDENT)
+              ? new Types.ObjectId(updateUserDto.classId)
+              : undefined,
           },
-          { new: true, session },
-        )
-        .exec();
+        },
+        { new: true, session },
+      ).exec();
 
       if (!updatedUser) {
         throw new CustomError(
