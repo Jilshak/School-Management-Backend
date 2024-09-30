@@ -1,25 +1,26 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsNumber, Min, Max } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsMongoId, Min, Max } from 'class-validator';
+import { Type } from 'class-transformer';
+import { Types } from 'mongoose';
 
 export class CreateResultDto {
-  @ApiProperty({ description: 'The ID of the student' })
   @IsNotEmpty()
-  @IsString()
-  studentId: string;
+  @IsMongoId()
+  @Type(() => Types.ObjectId)
+  studentId: Types.ObjectId;
 
-  @ApiProperty({ description: 'The ID of the exam' })
   @IsNotEmpty()
-  @IsString()
-  examId: string;
+  @IsMongoId()
+  @Type(() => Types.ObjectId)
+  examId: Types.ObjectId;
 
-  @ApiProperty({ description: 'The score obtained by the student', minimum: 0, maximum: 100 })
+  @IsNotEmpty()
+  @IsMongoId()
+  @Type(() => Types.ObjectId)
+  subjectId: Types.ObjectId;
+
   @IsNotEmpty()
   @IsNumber()
   @Min(0)
   @Max(100)
   score: number;
-
-  @ApiProperty({ description: 'Any remarks about the result' })
-  @IsString()
-  remarks: string;
 }

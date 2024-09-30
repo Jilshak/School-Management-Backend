@@ -94,7 +94,7 @@ export class UserService {
   async create(
     createUserDto: CreateUserDto,
     schoolId?: Types.ObjectId,
-  ): Promise<String> {
+  ): Promise<string> {
     let session: ClientSession | null = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -209,6 +209,7 @@ export class UserService {
       email: dto.email,
       address: dto.address,
       joinDate: dto.joinDate,
+      bloodGroup: dto.bloodGroup,
       department: dto.department,
       position: dto.position,
       qualifications: dto.qualifications,
@@ -261,6 +262,9 @@ export class UserService {
         contactNumber: dto.contactNumber,
         address: dto.address,
         joinDate: dto.joinDate,
+        bloodGroup: dto.bloodGroup,
+        extraCurricular: dto.extraCurricular,
+        remarks: dto.remarks,
         enrollmentNumber: dto.enrollmentNumber,
         classId: new Types.ObjectId(dto.classId),
         parentsDetails: dto.parentsDetails,
@@ -486,12 +490,33 @@ export class UserService {
 
       // Fetch additional details based on user roles
       if (user.roles.includes(UserRole.STUDENT)) {
-        const studentDetails = await this.studentModel.findOne({
-          userId: user._id,
-        }).session(session).lean();
-        const classroom = await this.classModel.findOne({_id:user.classId,isActive:true})
+        const studentDetails = await this.studentModel
+          .findOne({
+            userId: user._id,
+          })
+          .session(session)
+          .lean();
+        const [classroom] = await this.classModel.aggregate([
+          { $match: { _id: user.classId, isActive: true } },
+          {
+            $lookup: {
+              from: 'subjects',
+              localField: 'subjects',
+              foreignField: '_id',
+              as: 'subjects',
+            },
+          },
+          {
+            $lookup: {
+              from: 'teachers',
+              localField: 'classTeacherId',
+              foreignField: 'userId',
+              as: 'classTeacher',
+            },
+          }
+        ]);
 
-        user = { ...user, ...studentDetails,classroom };
+        user = { ...user, ...studentDetails, classroom };
       } else {
         // For non-student roles (STAFF, TEACHER, etc.)
         const staffDetails = await this.staffModel
@@ -503,23 +528,32 @@ export class UserService {
         user = { ...user, ...staffDetails };
 
         if (user.roles.includes(UserRole.TEACHER)) {
-          const teacherDetails = await this.teacherModel.findOne({
-            userId: user.userId,
-          }).session(session).lean();
-          
+          const teacherDetails = await this.teacherModel
+            .findOne({
+              userId: user.userId,
+            })
+            .session(session)
+            .lean();
+
           if (teacherDetails) {
             // Fetch subject details
             const subjectIds = teacherDetails.subjects || [];
-            const subjects = await this.subjectModel.find({
-              _id: { $in: subjectIds }
-            }).session(session).lean();
-            const classroom =await this.classModel.findOne({classTeacherId:user.userId,isActive:true})
-            
-            user = { 
-              ...user, 
-              ...teacherDetails, 
+            const subjects = await this.subjectModel
+              .find({
+                _id: { $in: subjectIds },
+              })
+              .session(session)
+              .lean();
+            const classroom = await this.classModel.findOne({
+              classTeacherId: user.userId,
+              isActive: true,
+            });
+
+            user = {
+              ...user,
+              ...teacherDetails,
               subjects: subjects,
-              classroom 
+              classroom,
             };
           } else {
             user.subjects = [];
@@ -578,18 +612,20 @@ export class UserService {
         updateUserDto.roles = [UserRole.STUDENT];
       }
 
-      const updatedUser = await this.userModel.findOneAndUpdate(
-        { _id: new Types.ObjectId(id), schoolId },
-        {
-          $set: {
-            roles: updateUserDto.roles,
-            classId: updateUserDto.roles.includes(UserRole.STUDENT)
-              ? new Types.ObjectId(updateUserDto.classId)
-              : undefined,
+      const updatedUser = await this.userModel
+        .findOneAndUpdate(
+          { _id: new Types.ObjectId(id), schoolId },
+          {
+            $set: {
+              roles: updateUserDto.roles,
+              classId: updateUserDto.roles.includes(UserRole.STUDENT)
+                ? new Types.ObjectId(updateUserDto.classId)
+                : undefined,
+            },
           },
-        },
-        { new: true, session },
-      ).exec();
+          { new: true, session },
+        )
+        .exec();
 
       if (!updatedUser) {
         throw new CustomError(

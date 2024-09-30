@@ -73,6 +73,19 @@ export class ExamController {
     return this.examService.findAllOfflineExams(Number(page), Number(limit), search, schoolId);
   }
 
+  @Get("offline-exam/:classId")
+  @Roles('admin', 'teacher')
+  @ApiOperation({ summary: 'Get all offline exams' })
+  @ApiResponse({ status: 200, description: 'Returns all offline exams.' })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiParam({ name: 'classId', required: true, type: Number })
+  findAllOfflineExamByClassId(
+    @Param('classId') classId: string,
+    @LoginUser("schoolId") schoolId: Types.ObjectId
+  ) {
+    return this.examService.findAllOfflineExamsForStudent(new Types.ObjectId(classId), schoolId);
+  }
+
   // New CRUD operations for SemExam
   @Get("/sem-exam/:id")
   @Roles('admin', 'teacher')
@@ -123,5 +136,55 @@ export class ExamController {
   @ApiParam({ name: 'id', type: 'string' })
   deleteClassTest(@Param('id') id: string, @LoginUser("schoolId") schoolId: Types.ObjectId) {
     return this.examService.deleteClassTest(id, schoolId);
+  }
+
+  // New endpoint for creating a result
+  @Post('result')
+  @Roles('admin', 'teacher')
+  @ApiOperation({ summary: 'Create a new exam result' })
+  @ApiResponse({ status: 201, description: 'The result has been successfully created.' })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiBody({ type: CreateResultDto })
+  createResult(
+    @Body(ValidationPipe) createResultDto: CreateResultDto,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+  ) {
+    return this.examService.createResult(createResultDto, schoolId);
+  }
+
+  @Get('result')
+  @Roles('admin', 'teacher')
+  @ApiOperation({ summary: 'Get existing exam result' })
+  @ApiResponse({ status: 200, description: 'Returns the existing exam result if found.' })
+  @ApiResponse({ status: 404, description: 'Result not found.' })
+  getExistingResult(
+    @Query('studentId') studentId: string,
+    @Query('examId') examId: string,
+    @Query('subjectId') subjectId: string,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+  ) {
+    return this.examService.getExistingResult(
+      new Types.ObjectId(studentId),
+      new Types.ObjectId(examId),
+      new Types.ObjectId(subjectId),
+      schoolId
+    );
+  }
+
+  @Get('result/student')
+  @Roles('student')
+  @ApiOperation({ summary: 'Get existing exam result' })
+  @ApiResponse({ status: 200, description: 'Returns the existing exam result if found.' })
+  @ApiResponse({ status: 404, description: 'Result not found.' })
+  getExistingResultOfStudent(
+    @Query('examId') examId: string,
+    @LoginUser('userId') studentId: Types.ObjectId,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+  ) {
+    return this.examService.getExistingResultOfStudent(
+      new Types.ObjectId(studentId),
+      new Types.ObjectId(examId),
+      schoolId
+    );
   }
 }

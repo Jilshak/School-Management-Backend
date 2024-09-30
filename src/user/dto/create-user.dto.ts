@@ -134,6 +134,9 @@ class PreviousEmploymentDto {
   revealedDate: Date;
 }
 
+
+
+
 export class CreateUserDto {
   @ApiProperty({ example: 'john@example.com' })
   @IsEmail()
@@ -143,9 +146,25 @@ export class CreateUserDto {
   @IsArray()
   roles: UserRole[];
 
+  @ApiProperty({type:String,required:false})
+  @IsString()
+  @IsOptional()
+  bloodGroup?:string;
+
   @ApiProperty({ example: 'John' })
   @IsString()
   firstName: string;
+
+  @ApiProperty({ example: ['Swimming', 'Chess'], description: 'List of extracurricular activities', type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  extraCurricular?: string[];
+
+  @ApiProperty({ example: "Remarks" })
+  @IsOptional()
+  @IsString()
+  remarks?: string;
 
   @ApiProperty({ example: 'Doe' })
   @IsString()

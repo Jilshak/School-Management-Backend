@@ -28,6 +28,12 @@ export class Student extends Document {
   @Prop({ required: true })
   lastName: string;
 
+  @Prop({type:[String],required:false})
+  extraCurricular: string[];
+
+  @Prop({type:String,required:false})
+  remarks: string;
+
   @Prop({ required: true })
   dateOfBirth: Date;
 
@@ -82,6 +88,9 @@ export class Student extends Document {
 
   @Prop({  default: true })
   isActive: boolean;
+
+  @Prop({type:String,required:false})
+  bloodGroup: string;
 }
 
 export const StudentSchema = SchemaFactory.createForClass(Student);

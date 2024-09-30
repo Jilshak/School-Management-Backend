@@ -24,7 +24,7 @@ import {
   StudyMaterial,
   StudyMaterialDocument,
 } from '../domains/schema/study-material.schema';
-import { Result, ResultDocument } from '../domains/schema/result.schema';
+// import { Result, ResultDocument } from '../domains/schema/result.schema';
 import { CreateClassroomDto } from './dto/create-classroom.dto';
 import { UpdateClassroomDto } from './dto/update-classroom.dto';
 import { CreateSubjectDto } from './dto/create-subject.dto';
@@ -50,7 +50,7 @@ export class ClassroomService {
     @InjectModel(StudyMaterial.name)
     private studyMaterialModel: Model<StudyMaterialDocument>,
     @InjectModel(Student.name) private studentModel: Model<Student>,
-    @InjectModel(Result.name) private resultModel: Model<ResultDocument>,
+    // @InjectModel(Result.name) private resultModel: Model<ResultDocument>,
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectConnection() private connection: Connection,
   ) {}

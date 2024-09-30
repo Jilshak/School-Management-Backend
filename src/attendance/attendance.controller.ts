@@ -59,7 +59,6 @@ export class AttendanceController {
   @Get('/student-attendance')
   @Roles(UserRole.STUDENT)
   @ApiOperation({ summary: 'Get attendance records for a student' })
-  @ApiParam({ name: 'studentId', type: 'string', description: 'ID of the student' })
   @ApiQuery({ name: 'month', type: 'number', required: false, description: 'Month number (0-11, where 0 is January). If not provided, current month is used.' })
   @ApiResponse({ status: 200, description: 'Returns attendance records for the specified student.' })
   @ApiResponse({ status: 404, description: 'Student not found.' })

@@ -112,6 +112,9 @@ export class Staff {
 
   @Prop({ type: Types.ObjectId, ref: 'User',unique:true })
   userId: Types.ObjectId;
+
+  @Prop({type:String,required:false})
+  bloodGroup: string;
 }
 
 export const StaffSchema = SchemaFactory.createForClass(Staff);
