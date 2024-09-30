@@ -440,7 +440,7 @@ export class UserService {
         const studentDetails = await this.studentModel.findOne({
           userId: user._id,
         }).session(session).lean();
-        const classroom = await this.classModel.findOne({classTeacherId:user.classId,isActive:true})
+        const classroom = await this.classModel.findOne({_id:user.classId,isActive:true})
 
         user = { ...user, ...studentDetails,classroom };
       } else {
