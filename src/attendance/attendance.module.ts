@@ -7,6 +7,7 @@ import { Student, StudentSchema } from 'src/domains/schema/students.schema';
 import { User, UserSchema } from 'src/domains/schema/user.schema';
 import { Classroom, ClassroomSchema } from 'src/domains/schema/classroom.schema';
 import { GuardsModule } from '../guards/guards.module';
+import { Leave, LeaveSchema } from 'src/domains/schema/leave.schema';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { GuardsModule } from '../guards/guards.module';
       { name: Student.name, schema: StudentSchema },
       { name: User.name, schema: UserSchema },
       { name: Classroom.name, schema: ClassroomSchema },
+      { name: Leave.name, schema: LeaveSchema },
     ]),
     GuardsModule,
   ],
