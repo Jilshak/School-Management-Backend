@@ -9,6 +9,7 @@ import { Types } from 'mongoose';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from 'src/domains/enums/user-roles.enum';
 import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
+import { LeaveReqDto } from './dto/create-leave-request.dto';
 
 @ApiTags('attendance')
 @ApiBearerAuth()
@@ -143,5 +144,31 @@ export class AttendanceController {
     @LoginUser("schoolId") schoolId: Types.ObjectId
   ) {
     return this.attendanceService.updateByStudent(studentId, schoolId, attendanceUpdates);
+  }
+
+  @Post("/leave-request")
+  @Roles(UserRole.STUDENT)
+  @ApiOperation({ summary: 'Create leave request' })
+  @ApiResponse({ status: 201, description: 'The leave request has been successfully created.' })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiBody({
+    type: LeaveReqDto,
+    description: 'Leave request data',
+  })
+  createLeaveRequest(@Body() leaveReqDto: LeaveReqDto, @LoginUser("userId") studentId: Types.ObjectId,@LoginUser("classId") classId:Types.ObjectId) {
+    return this.attendanceService.createLeaveRequest(leaveReqDto, studentId,classId);
+  }
+
+  @Get("/leave-request/student")
+  @Roles(UserRole.STUDENT)
+  @ApiOperation({ summary: 'Create leave request' })
+  @ApiResponse({ status: 201, description: 'The leave request has been successfully created.' })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiBody({
+    type: LeaveReqDto,
+    description: 'Leave request data',
+  })
+  getLeaveRequestStudent( @LoginUser("userId") studentId: Types.ObjectId,@LoginUser("classId") classId:Types.ObjectId) {
+    return this.attendanceService.getLeaveRequestStudent( studentId,classId);
   }
 }

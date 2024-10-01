@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { InjectModel } from '@nestjs/mongoose';
@@ -8,6 +8,8 @@ import { Model } from 'mongoose';
 import { Student } from 'src/domains/schema/students.schema';
 import { User } from 'src/domains/schema/user.schema';
 import { Classroom } from 'src/domains/schema/classroom.schema';
+import { LeaveReqDto } from './dto/create-leave-request.dto';
+import { Leave } from 'src/domains/schema/leave.schema';
 
 @Injectable()
 export class AttendanceService {
@@ -17,6 +19,7 @@ export class AttendanceService {
     @InjectModel(Student.name) private studentModel: Model<Student>,
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Classroom.name) private classroomModel: Model<Classroom>,
+    @InjectModel(Leave.name) private leaveModel: Model<Leave>,
   ) {}
 
   async create(
@@ -454,7 +457,26 @@ export class AttendanceService {
     }
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} attendance`;
+  async createLeaveRequest(leaveReqDto: LeaveReqDto, studentId: Types.ObjectId,classId:Types.ObjectId) {
+    try {
+      const existingLeave = await this.leaveModel.findOne({studentId,classId,startDate:{$gte:leaveReqDto.startDate,$lte:leaveReqDto.endDate}})
+      if(existingLeave){
+        throw new BadRequestException("Leave request already exists")
+      }
+      const leave = new this.leaveModel({...leaveReqDto,studentId,classId})
+     await leave.save()
+     return leave
+    } catch (error) {
+      throw error
+    }
+  }
+
+  async getLeaveRequestStudent( studentId: Types.ObjectId,classId:Types.ObjectId) {
+    try {
+      const leave = await this.leaveModel.find({studentId,classId})
+     return leave
+    } catch (error) {
+      throw error
+    }
   }
 }
