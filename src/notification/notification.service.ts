@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import * as admin from 'firebase-admin';
-import * as serviceAccount from '../../fcmAccountCredentials.json'; // Adjust the path to your downloaded JSON file
+import * as serviceAccount from '../../fcmAccountCredentials.json';
 
 @Injectable()
 export class NotificationService {

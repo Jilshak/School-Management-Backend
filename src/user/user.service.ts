@@ -508,7 +508,7 @@ export class UserService {
           },
           {
             $lookup: {
-              from: 'teachers',
+              from: 'staffs',
               localField: 'classTeacherId',
               foreignField: 'userId',
               as: 'classTeacher',
