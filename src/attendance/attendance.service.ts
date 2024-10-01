@@ -31,10 +31,8 @@ async create(
       studentsAttendance,
       ...rest
     } = createAttendanceDto;
-
     const dateToCompare = new Date(attendanceDate);
-    dateToCompare.setHours(0, 0, 0, 0);
-
+    dateToCompare.setUTCHours(0, 0, 0, 0);
     const filter = {
       classId: new Types.ObjectId(classId),
       schoolId,
