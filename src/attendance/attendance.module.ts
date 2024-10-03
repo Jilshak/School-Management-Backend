@@ -8,6 +8,7 @@ import { User, UserSchema } from 'src/domains/schema/user.schema';
 import { Classroom, ClassroomSchema } from 'src/domains/schema/classroom.schema';
 import { GuardsModule } from '../guards/guards.module';
 import { Leave, LeaveSchema } from 'src/domains/schema/leave.schema';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Module({
   imports: [
@@ -21,6 +22,6 @@ import { Leave, LeaveSchema } from 'src/domains/schema/leave.schema';
     GuardsModule,
   ],
   controllers: [AttendanceController],
-  providers: [AttendanceService],
+  providers: [AttendanceService,NotificationService],
 })
 export class AttendanceModule {}

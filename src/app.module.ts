@@ -28,6 +28,9 @@ import { FeeStructure, FeeStructureSchema } from './domains/schema/fee-structure
 import { User, UserSchema } from './domains/schema/user.schema';
 import { Student, StudentSchema } from './domains/schema/students.schema';
 import { School, SchoolSchema } from './domains/schema/school.schema';
+import { EventService } from './event/event.service';
+import { EventController } from './event/event.controller';
+import { EventModule } from './event/event.module';
 
 @Module({
   imports: [
@@ -69,7 +72,9 @@ import { School, SchoolSchema } from './domains/schema/school.schema';
     OthersModule,
     SchoolTypeModule,
     AttendanceModule,
+    EventModule,
   ],
-  providers:[PaymentDueCron, NotificationService]
+  providers:[PaymentDueCron, NotificationService],
+  controllers: []
 })
 export class AppModule {}

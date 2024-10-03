@@ -40,6 +40,7 @@ export class AuthController {
       await this.authService.updateFcmToken(userId, token);
       return { message: 'FCM token updated successfully.' };
     } catch (error) {
+      console.log(error);
       throw new UnauthorizedException('Failed to update FCM token');
     }
   }

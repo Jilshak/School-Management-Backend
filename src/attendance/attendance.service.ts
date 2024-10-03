@@ -10,12 +10,14 @@ import { User } from 'src/domains/schema/user.schema';
 import { Classroom } from 'src/domains/schema/classroom.schema';
 import { LeaveReqDto } from './dto/create-leave-request.dto';
 import { Leave } from 'src/domains/schema/leave.schema';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class AttendanceService {
   constructor(
     @InjectModel(Attendance.name)
     private attendanceModel: Model<Attendance>,
+    private notificationService: NotificationService,
     @InjectModel(Student.name) private studentModel: Model<Student>,
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Classroom.name) private classroomModel: Model<Classroom>,
@@ -419,9 +421,61 @@ async create(
     }
   }
 
+  async updateLeaveRequest(leaveId:string | Types.ObjectId,leaveReqDto: LeaveReqDto, studentId: Types.ObjectId,classId:Types.ObjectId) {
+    try {
+      leaveId = new Types.ObjectId(leaveId)
+      const existingLeave = await this.leaveModel.findOne({studentId,classId,startDate:{$gte:leaveReqDto.startDate,$lte:leaveReqDto.endDate},_id:{$ne:leaveId}})
+      if(existingLeave){
+        throw new BadRequestException("Leave request already exists")
+      }
+      const isPending = await this.leaveModel.findOne({_id:leaveId,classId,studentId,status:"pending"})
+      if(!isPending){
+        throw new BadRequestException("Leave Can't be Edited")
+      }
+      const leave = await this.leaveModel.updateOne({_id:leaveId,classId,studentId},{$set:{...leaveReqDto}})
+     return leave
+    } catch (error) {
+      throw error
+    }
+  }
+
   async getLeaveRequestStudent( studentId: Types.ObjectId,classId:Types.ObjectId) {
     try {
       const leave = await this.leaveModel.find({studentId,classId})
+     return leave
+    } catch (error) {
+      throw error
+    }
+  }
+
+  async getLeaveRequestClassTEacher( userId: Types.ObjectId) {
+    try {
+      const {_id:classId} = await this.classroomModel.findOne({classTeacherId:userId,isActive:true})
+      if(!classId){
+        throw new NotFoundException("Class not found")
+      }
+      const leave = await this.leaveModel.aggregate([{$match:{classId}},{$lookup:{from:"students",localField:"studentId",foreignField:"userId",as:"studentDetails"}},{$unwind:"$studentDetails"}  ])
+     return leave
+    } catch (error) {
+      throw error
+    }
+  }
+
+  async updateLeaveStatus( leaveId:string | Types.ObjectId,status: "approved" | "rejected",userId: Types.ObjectId) {
+    try {
+      const {_id:classId} = await this.classroomModel.findOne({classTeacherId:userId,isActive:true})
+      if(!classId){
+        throw new NotFoundException("Class not found")
+      }
+      leaveId = new Types.ObjectId(leaveId)
+      const leave = await this.leaveModel.findOneAndUpdate({_id:leaveId,classId},{$set:{status}})
+      const user = await this.userModel.findOne({_id:leave.studentId})
+      const fcmTokens = user.fcmToken
+      if(fcmTokens){
+        fcmTokens.forEach(async (token) => {
+          await this.notificationService.sendNotification(token, "Leave Request", `Your leave request has been ${status}`)
+        })
+      }
      return leave
     } catch (error) {
       throw error

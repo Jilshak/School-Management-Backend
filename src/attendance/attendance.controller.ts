@@ -162,6 +162,21 @@ export class AttendanceController {
     return this.attendanceService.createLeaveRequest(leaveReqDto, studentId,classId);
   }
 
+  @Patch("/leave-request/edit/:leaveId")
+  @Roles(UserRole.STUDENT)
+  @ApiOperation({ summary: 'Create leave request' })
+  @ApiResponse({ status: 201, description: 'The leave request has been successfully created.' })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiBody({
+    type: LeaveReqDto,
+    description: 'Leave request data',
+  })
+  updateLeaveRequest(@Param("leaveId") leaveId:string,@Body() leaveReqDto: LeaveReqDto, @LoginUser("userId") studentId: Types.ObjectId,@LoginUser("classId") classId:Types.ObjectId) {
+    return this.attendanceService.updateLeaveRequest(leaveId,leaveReqDto, studentId,classId);
+  }
+
+  
+
   @Get("/leave-request/student")
   @Roles(UserRole.STUDENT)
   @ApiOperation({ summary: 'Create leave request' })
@@ -169,5 +184,29 @@ export class AttendanceController {
   @ApiResponse({ status: 400, description: 'Bad Request.' })
   getLeaveRequestStudent( @LoginUser("userId") studentId: Types.ObjectId,@LoginUser("classId") classId:Types.ObjectId) {
     return this.attendanceService.getLeaveRequestStudent( studentId,classId);
+  }
+
+  @Get("/leave-request/class-teacher")
+  @Roles(UserRole.TEACHER)
+  @ApiOperation({ summary: 'Create leave request' })
+  @ApiResponse({ status: 201, description: 'The leave request has been successfully created.' })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  getLeaveRequestClassTeacher( @LoginUser("userId") teacherId: Types.ObjectId) {
+    return this.attendanceService.getLeaveRequestClassTEacher( teacherId);
+  }
+
+  @Patch("/leave-request/:leaveId")
+  @Roles(UserRole.TEACHER)
+  @ApiOperation({ summary: 'Create leave request' })
+  @ApiParam({name:"leaveId",type:"string",description:"leave id"})
+  @ApiBody({schema:{
+    properties:{
+      status:{type:"string",enum:["approved","rejected"]}
+    }
+  }})
+  @ApiResponse({ status: 201, description: 'The leave request has been successfully created.' })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  updateLeaveRequestStatusChange(@Param("leaveId") leaveId:string,@Body() body:{status:"approved" | "rejected"},@LoginUser("userId") teacherId: Types.ObjectId) {
+    return this.attendanceService.updateLeaveStatus( leaveId,body.status,teacherId);
   }
 }

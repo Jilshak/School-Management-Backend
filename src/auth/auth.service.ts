@@ -55,16 +55,14 @@ export class AuthService {
       if(isTokenExists){
         this.userModel.updateOne({_id:userId},{$pull:{fcmToken:token}})
       }
-      const result = await this.userModel.updateOne(
+       await this.userModel.updateOne(
         { _id: userId },
         { $addToSet: { fcmToken: token } }
       );
       this.notificationService.sendNotification(token, 'FCM Token Updated', 'Your FCM token has been updated');
 
-      if (result.modifiedCount === 0) {
-        throw new Error('User not found or token already exists');
-      }
     } catch (error) {
+      console.log(error);
       throw new InternalServerErrorException('Failed to update FCM token');
     }
   }

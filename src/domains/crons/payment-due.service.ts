@@ -18,6 +18,7 @@ export class PaymentDueCron {
 		private notificationService: NotificationService,
 	) {}
 
+
 	@Cron(CronExpression.EVERY_DAY_AT_4PM)
 	async createPaymentDues() {
 		this.logger.log('Running create payment dues cron job');
