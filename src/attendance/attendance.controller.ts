@@ -167,10 +167,6 @@ export class AttendanceController {
   @ApiOperation({ summary: 'Create leave request' })
   @ApiResponse({ status: 201, description: 'The leave request has been successfully created.' })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
-  @ApiBody({
-    type: LeaveReqDto,
-    description: 'Leave request data',
-  })
   getLeaveRequestStudent( @LoginUser("userId") studentId: Types.ObjectId,@LoginUser("classId") classId:Types.ObjectId) {
     return this.attendanceService.getLeaveRequestStudent( studentId,classId);
   }
