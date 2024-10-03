@@ -561,4 +561,73 @@ export class TimetableService {
       }
     }
   }
+
+  async findTeacherTimetable(teacherId: string | Types.ObjectId, schoolId: Types.ObjectId): Promise<any> {
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    teacherId = new Types.ObjectId(teacherId);
+    const aggregationPipeline: any = [
+      { $match: { schoolId: schoolId } },
+      {
+        $lookup: {
+          from: 'classrooms',
+          localField: 'classId',
+          foreignField: '_id',
+          as: 'classDetails'
+        }
+      },
+      { $unwind: '$classDetails' },
+      ...days.flatMap(day => [
+        {
+          $lookup: {    
+            from: 'subjects',
+            localField: `${day}.subjectId`,
+            foreignField: '_id',
+            as: `${day}Subjects`
+          }
+        },
+        {
+          $lookup: {
+            from: 'staffs',
+            localField: `${day}.teacherId`, 
+            foreignField: 'userId',
+            as: `${day}TeacherDetails`
+          }
+        }
+      ])
+    ];
+
+    const timetables = await this.timetableModel.aggregate(aggregationPipeline);
+    
+    if (timetables.length === 0) {
+      throw new NotFoundException('No timetable found');
+    }
+
+    const formattedTimetable = {};
+    
+    days.forEach(day => {
+      formattedTimetable[day] = [];
+      timetables.forEach(timetable => {
+        if (timetable[day] && timetable[day].length > 0) {
+          timetable[day].forEach((period, index) => {
+            if (period.teacherId.toString() === teacherId.toString()) {
+              const teacherDetails = timetable[`${day}TeacherDetails`].find(detail => detail._id.toString() === period.teacherId.toString());
+              const subject = timetable[`${day}Subjects`].find(subject => subject._id.toString() === period.subjectId.toString());
+              
+              formattedTimetable[day].push({
+                period: index + 1,
+                startTime: period.startTime,
+                endTime: period.endTime,
+                className: timetable.classDetails.name,
+                teacher: teacherDetails,
+                subject: subject
+              });
+            }
+          });
+        }
+      });
+    });
+
+    return formattedTimetable;
+  }
+  
 }

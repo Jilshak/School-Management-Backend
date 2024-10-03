@@ -63,6 +63,15 @@ export class TimetableController {
   ) {
     return this.timetableService.findAll(schoolId, page, limit, full);
   }
+  @Get('/teacher-timetable')
+  @Roles('teacher')
+  @ApiOperation({ summary: 'Get teacher timetable' })
+  @ApiResponse({ status: 200, description: 'Return teacher timetable.' })
+  @ApiResponse({ status: 404, description: 'Timetable not found.' })
+  @ApiParam({ name: 'teacherId', required: true, description: 'Teacher ID' })
+  findTeacherTimetable(@LoginUser('userId') userId: string,@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    return this.timetableService.findTeacherTimetable(userId,schoolId);
+  }
 
   @Get(':classId')
   @Roles('admin', 'teacher', UserRole.STUDENT)
