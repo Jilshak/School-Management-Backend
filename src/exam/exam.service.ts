@@ -336,6 +336,7 @@ export class ExamService {
   async findAllOfflineExamsForStudent(
     classId: Types.ObjectId,
     schoolId: Types.ObjectId,
+    studentId?:Types.ObjectId,
   ) {
     try {
       const classTests = await this.classTestModel.aggregate([
@@ -480,7 +481,7 @@ export class ExamService {
         },
       ]);
 
-      const combinedExams = [
+      let combinedExams = [
         ...classTests.map((test) => ({ ...test, examType: 'Class Test' })),
         ...semExams.map((exam) => ({
           ...exam,
@@ -494,7 +495,22 @@ export class ExamService {
         (a, b) =>
           new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
       );
+      if(studentId){
 
+        combinedExams = await Promise.all(combinedExams.map(async (exam) => {
+          const results = await this.getExistingResultOfStudent(studentId, exam._id, schoolId);
+          
+          if (exam.examType === "Sem Exam") {
+            const totalMarks = results.reduce((sum, result) => sum + result.score, 0);
+            const totalSubjects = results.length;
+            exam.score = totalSubjects > 0 ? totalMarks / totalSubjects : 0;
+          } else {
+            exam.score = results.length > 0 ? results[0].score : 0;
+          }
+
+          return exam;
+        }));
+    }
       return {
         exams: combinedExams,
         total:
@@ -798,6 +814,18 @@ export class ExamService {
         studentId,
         examId,
         subjectId,
+        schoolId,
+      }).exec();
+    } catch (error) {
+      this.handleError(error, 'Failed to get existing result');
+    }
+  }
+
+  async getExistingResultAll(studentId: Types.ObjectId,  schoolId: Types.ObjectId,examId?: Types.ObjectId): Promise<Result | null> {
+    try {
+      return this.resultModel.findOne({
+        studentId,
+        examId,
         schoolId,
       }).exec();
     } catch (error) {

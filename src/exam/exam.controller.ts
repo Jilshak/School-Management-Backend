@@ -12,6 +12,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
 import { Types } from 'mongoose';
+import { UserRole } from 'src/domains/enums/user-roles.enum';
 
 @ApiTags('exams')
 @ApiBearerAuth()
@@ -51,9 +52,10 @@ export class ExamController {
   @ApiQuery({ name: 'search', required: false, type: String })
   findAllOfflineExamForStudent(
     @LoginUser("classId") classId: Types.ObjectId,
-    @LoginUser("schoolId") schoolId: Types.ObjectId
+    @LoginUser("schoolId") schoolId: Types.ObjectId,
+    @LoginUser("userId") studentId:Types.ObjectId,
   ) {
-    return this.examService.findAllOfflineExamsForStudent(classId, schoolId);
+    return this.examService.findAllOfflineExamsForStudent(classId, schoolId,studentId);
   }
 
   @Get("offline-exam")
@@ -79,11 +81,13 @@ export class ExamController {
   @ApiResponse({ status: 200, description: 'Returns all offline exams.' })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
   @ApiParam({ name: 'classId', required: true, type: Number })
+  @ApiQuery({ name: 'studentId', required: false, type: String })
   findAllOfflineExamByClassId(
     @Param('classId') classId: string,
-    @LoginUser("schoolId") schoolId: Types.ObjectId
+    @LoginUser("schoolId") schoolId: Types.ObjectId,
+    @Query('studentId') studentId?: string
   ) {
-    return this.examService.findAllOfflineExamsForStudent(new Types.ObjectId(classId), schoolId);
+    return this.examService.findAllOfflineExamsForStudent(new Types.ObjectId(classId), schoolId,new Types.ObjectId(studentId));
   }
 
   // New CRUD operations for SemExam
@@ -179,6 +183,23 @@ export class ExamController {
   getExistingResultOfStudent(
     @Query('examId') examId: string,
     @LoginUser('userId') studentId: Types.ObjectId,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+  ) {
+    return this.examService.getExistingResultOfStudent(
+      new Types.ObjectId(studentId),
+      new Types.ObjectId(examId),
+      schoolId
+    );
+  }
+
+  @Get('result/teacher')
+  @Roles(UserRole.TEACHER,UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get existing exam result' })
+  @ApiResponse({ status: 200, description: 'Returns the existing exam result if found.' })
+  @ApiResponse({ status: 404, description: 'Result not found.' })
+  getExistingResultOfStudentAll(
+    @Query('examId') examId: string,
+    @Query('studentId') studentId: Types.ObjectId,
     @LoginUser('schoolId') schoolId: Types.ObjectId,
   ) {
     return this.examService.getExistingResultOfStudent(
