@@ -1,9 +1,13 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { Types } from 'mongoose';
-import {Attendance} from 'src/domains/schema/attendance.schema';
+import { Attendance } from 'src/domains/schema/attendance.schema';
 import { Model } from 'mongoose';
 import { Student } from 'src/domains/schema/students.schema';
 import { User } from 'src/domains/schema/user.schema';
@@ -24,80 +28,101 @@ export class AttendanceService {
     @InjectModel(Leave.name) private leaveModel: Model<Leave>,
   ) {}
 
-async create(
-  createAttendanceDto: CreateAttendanceDto,
-  schoolId: Types.ObjectId,
-): Promise<Attendance> {
-  try {
-    const {
-      classId,
-      teacherId,
-      attendanceDate,
-      studentsAttendance,
-      ...rest
-    } = createAttendanceDto;
-    const dateToCompare = new Date(attendanceDate);
-    dateToCompare.setUTCHours(0, 0, 0, 0);
-    const filter = {
-      classId: new Types.ObjectId(classId),
-      schoolId,
-      attendanceDate: {
-        $gte: dateToCompare,
-        $lt: new Date(dateToCompare.getTime() + 24 * 60 * 60 * 1000),
-      },
-    };
-
-    const update = {
-      $set: {
-        ...rest,
-        attendanceDate: dateToCompare,
-        teacherId: new Types.ObjectId(teacherId),
-      },
-    };
-
-    const options = {
-      new: true,
-      upsert: true,
-    };
-
-    const updatedAttendance = await this.attendanceModel.findOneAndUpdate(filter, update, options);
-
-    // If the document was just created or studentsAttendance is empty, set the studentsAttendance
-    if (!updatedAttendance.studentsAttendance || updatedAttendance.studentsAttendance.length === 0) {
-      updatedAttendance.studentsAttendance = studentsAttendance.map(student => ({
-        ...student,
-        studentId: new Types.ObjectId(student.studentId),
-        remark: student.remark || '' // Ensure remark is always present
-      }));
-    } else {
-      // Update existing studentsAttendance
-      updatedAttendance.studentsAttendance = updatedAttendance.studentsAttendance.map(existingStudent => {
-        const updatedStudent = studentsAttendance.find(s => s.studentId.toString() === existingStudent.studentId.toString());
-        if (updatedStudent) {
-          return {
-            ...existingStudent,
-            status: updatedStudent.status,
-            remark: updatedStudent.remark || existingStudent.remark || ''
-          };
-        }
-        return existingStudent;
-      });
-    }
-
-    // Save the changes
-    await updatedAttendance.save();
-
-    return updatedAttendance;
-  } catch (err) {
-    throw err;
-  }
-}
-
-  async findAll(classId: string,month:Date = new Date()): Promise<any[]> {
+  async create(
+    createAttendanceDto: CreateAttendanceDto,
+    schoolId: Types.ObjectId,
+  ): Promise<Attendance> {
     try {
-      month = new Date(month)
-      const firstDayOfMonth = new Date(month.getFullYear(), month.getMonth(), 1);
-      const lastDayOfMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+      const {
+        classId,
+        teacherId,
+        attendanceDate,
+        studentsAttendance,
+        ...rest
+      } = createAttendanceDto;
+      const dateToCompare = new Date(attendanceDate);
+      dateToCompare.setUTCHours(0, 0, 0, 0);
+      const filter = {
+        classId: new Types.ObjectId(classId),
+        schoolId,
+        attendanceDate: {
+          $gte: dateToCompare,
+          $lt: new Date(dateToCompare.getTime() + 24 * 60 * 60 * 1000),
+        },
+      };
+
+      const update = {
+        $set: {
+          ...rest,
+          attendanceDate: dateToCompare,
+          teacherId: new Types.ObjectId(teacherId),
+        },
+      };
+
+      const options = {
+        new: true,
+        upsert: true,
+      };
+
+      const updatedAttendance = await this.attendanceModel.findOneAndUpdate(
+        filter,
+        update,
+        options,
+      );
+
+      // If the document was just created or studentsAttendance is empty, set the studentsAttendance
+      if (
+        !updatedAttendance.studentsAttendance ||
+        updatedAttendance.studentsAttendance.length === 0
+      ) {
+        updatedAttendance.studentsAttendance = studentsAttendance.map(
+          (student) => ({
+            ...student,
+            studentId: new Types.ObjectId(student.studentId),
+            remark: student.remark || '', // Ensure remark is always present
+          }),
+        );
+      } else {
+        // Update existing studentsAttendance
+        updatedAttendance.studentsAttendance =
+          updatedAttendance.studentsAttendance.map((existingStudent) => {
+            const updatedStudent = studentsAttendance.find(
+              (s) =>
+                s.studentId.toString() === existingStudent.studentId.toString(),
+            );
+            if (updatedStudent) {
+              return {
+                ...existingStudent,
+                status: updatedStudent.status,
+                remark: updatedStudent.remark || existingStudent.remark || '',
+              };
+            }
+            return existingStudent;
+          });
+      }
+
+      // Save the changes
+      await updatedAttendance.save();
+
+      return updatedAttendance;
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  async findAll(classId: string, month: Date = new Date()): Promise<any[]> {
+    try {
+      month = new Date(month);
+      const firstDayOfMonth = new Date(
+        month.getFullYear(),
+        month.getMonth(),
+        1,
+      );
+      const lastDayOfMonth = new Date(
+        month.getFullYear(),
+        month.getMonth() + 1,
+        0,
+      );
 
       const attendanceRecords = await this.attendanceModel
         .find({
@@ -142,7 +167,7 @@ async create(
 
       return studentsWithAttendance;
     } catch (err) {
-      console.log(err)
+      console.log(err);
       throw err;
     }
   }
@@ -167,29 +192,29 @@ async create(
           },
         },
         {
-          $unwind: '$studentsAttendance'
+          $unwind: '$studentsAttendance',
         },
         {
           $lookup: {
             from: 'students',
             localField: 'studentsAttendance.studentId',
             foreignField: 'userId',
-            as: 'studentDetails'
-          }
+            as: 'studentDetails',
+          },
         },
         {
-          $unwind: '$studentDetails'
+          $unwind: '$studentDetails',
         },
         {
           $lookup: {
             from: 'users',
             localField: 'studentDetails.userId',
             foreignField: '_id',
-            as: 'userDetails'
-          }
+            as: 'userDetails',
+          },
         },
         {
-          $unwind: '$userDetails'
+          $unwind: '$userDetails',
         },
         {
           $project: {
@@ -199,9 +224,9 @@ async create(
             firstName: '$studentDetails.firstName',
             lastName: '$studentDetails.lastName',
             enrollmentNumber: '$studentDetails.enrollmentNumber',
-            username: '$userDetails.username'
-          }
-        }
+            username: '$userDetails.username',
+          },
+        },
       ]);
 
       return attendanceRecords;
@@ -219,20 +244,25 @@ async create(
       const studentObjectId = new Types.ObjectId(studentId);
       const currentDate = new Date();
       const targetMonth = month !== undefined ? month : currentDate.getMonth();
-      
+
       // Determine the academic year
       const academicYearStart = 8; // September (0-based index)
       let targetYear = currentDate.getFullYear();
-      
+
       if (targetMonth < academicYearStart) {
-        targetYear = currentDate.getMonth() < academicYearStart ? currentDate.getFullYear() : currentDate.getFullYear() + 1;
+        targetYear =
+          currentDate.getMonth() < academicYearStart
+            ? currentDate.getFullYear()
+            : currentDate.getFullYear() + 1;
       } else {
-        targetYear = currentDate.getMonth() >= academicYearStart ? currentDate.getFullYear() : currentDate.getFullYear() - 1;
+        targetYear =
+          currentDate.getMonth() >= academicYearStart
+            ? currentDate.getFullYear()
+            : currentDate.getFullYear() - 1;
       }
 
       const firstDayOfMonth = new Date(targetYear, targetMonth, 1);
       const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0);
-
 
       const result = await this.studentModel.aggregate([
         // Match the student
@@ -272,7 +302,9 @@ async create(
               { $unwind: '$studentsAttendance' },
               {
                 $match: {
-                  $expr: { $eq: ['$studentsAttendance.studentId', '$$studentId'] },
+                  $expr: {
+                    $eq: ['$studentsAttendance.studentId', '$$studentId'],
+                  },
                 },
               },
               { $sort: { attendanceDate: 1 } },
@@ -374,111 +406,204 @@ async create(
           {
             schoolId: schoolId,
             attendanceDate: { $gte: startOfDay, $lte: endOfDay },
-            'studentsAttendance.studentId': studentObjectId
+            'studentsAttendance.studentId': studentObjectId,
           },
           {
             $set: {
               'studentsAttendance.$.status': update.status,
-              'studentsAttendance.$.remark': update.remark || ''
-            }
-          }
+              'studentsAttendance.$.remark': update.remark || '',
+            },
+          },
         );
       }
 
       // Fetch and return the updated attendance records
-      const updatedRecords = await this.attendanceModel.find({
-        schoolId: schoolId,
-        'studentsAttendance.studentId': studentObjectId,
-        attendanceDate: {
-          $in: attendanceUpdates.map(update => new Date(update.date))
-        }
-      }).lean();
+      const updatedRecords = await this.attendanceModel
+        .find({
+          schoolId: schoolId,
+          'studentsAttendance.studentId': studentObjectId,
+          attendanceDate: {
+            $in: attendanceUpdates.map((update) => new Date(update.date)),
+          },
+        })
+        .lean();
 
       return {
         studentId: studentId,
-        updatedAttendance: updatedRecords.map(record => ({
+        updatedAttendance: updatedRecords.map((record) => ({
           date: record.attendanceDate,
-          status: record.studentsAttendance.find(sa => sa.studentId.toString() === studentId)?.status,
-          remark: record.studentsAttendance.find(sa => sa.studentId.toString() === studentId)?.remark
-        }))
+          status: record.studentsAttendance.find(
+            (sa) => sa.studentId.toString() === studentId,
+          )?.status,
+          remark: record.studentsAttendance.find(
+            (sa) => sa.studentId.toString() === studentId,
+          )?.remark,
+        })),
       };
     } catch (err) {
       throw err;
     }
   }
 
-  async createLeaveRequest(leaveReqDto: LeaveReqDto, studentId: Types.ObjectId,classId:Types.ObjectId) {
+  async createLeaveRequest(
+    leaveReqDto: LeaveReqDto,
+    studentId: Types.ObjectId,
+    classId: Types.ObjectId,
+  ) {
     try {
-      const existingLeave = await this.leaveModel.findOne({studentId,classId,startDate:{$gte:leaveReqDto.startDate,$lte:leaveReqDto.endDate}})
-      if(existingLeave){
-        throw new BadRequestException("Leave request already exists")
+      const existingLeave = await this.leaveModel.findOne({
+        studentId,
+        classId,
+        startDate: { $gte: leaveReqDto.startDate, $lte: leaveReqDto.endDate },
+      });
+      if (existingLeave) {
+        throw new BadRequestException('Leave request already exists');
       }
-      const leave = new this.leaveModel({...leaveReqDto,studentId,classId})
-     await leave.save()
-     return leave
+      const leave = new this.leaveModel({ ...leaveReqDto, studentId, classId });
+      await leave.save();
+      return leave;
     } catch (error) {
-      throw error
+      throw error;
     }
   }
 
-  async updateLeaveRequest(leaveId:string | Types.ObjectId,leaveReqDto: LeaveReqDto, studentId: Types.ObjectId,classId:Types.ObjectId) {
+  async updateLeaveRequest(
+    leaveId: string | Types.ObjectId,
+    leaveReqDto: LeaveReqDto,
+    studentId: Types.ObjectId,
+    classId: Types.ObjectId,
+  ) {
     try {
-      leaveId = new Types.ObjectId(leaveId)
-      const existingLeave = await this.leaveModel.findOne({studentId,classId,startDate:{$gte:leaveReqDto.startDate,$lte:leaveReqDto.endDate},_id:{$ne:leaveId}})
-      if(existingLeave){
-        throw new BadRequestException("Leave request already exists")
+      leaveId = new Types.ObjectId(leaveId);
+      const existingLeave = await this.leaveModel.findOne({
+        _id: leaveId,
+        classId,
+        studentId,
+        status: 'pending',
+      });
+
+      if (!existingLeave) {
+        throw new BadRequestException(
+          'Leave request not found or cannot be edited',
+        );
       }
-      const isPending = await this.leaveModel.findOne({_id:leaveId,classId,studentId,status:"pending"})
-      if(!isPending){
-        throw new BadRequestException("Leave Can't be Edited")
-      }
-      const leave = await this.leaveModel.updateOne({_id:leaveId,classId,studentId},{$set:{...leaveReqDto}})
-     return leave
+
+      const updatedLeave = await this.leaveModel.findByIdAndUpdate(
+        leaveId,
+        { $set: { ...leaveReqDto } },
+        { new: true },
+      );
+
+      return updatedLeave;
     } catch (error) {
-      throw error
+      throw error;
     }
   }
 
-  async getLeaveRequestStudent( studentId: Types.ObjectId,classId:Types.ObjectId) {
+  async getLeaveRequestStudent(
+    studentId: Types.ObjectId,
+    classId: Types.ObjectId,
+  ) {
     try {
-      const leave = await this.leaveModel.find({studentId,classId})
-     return leave
+      const leave = await this.leaveModel.find({ studentId, classId });
+      return leave;
     } catch (error) {
-      throw error
+      throw error;
     }
   }
 
-  async getLeaveRequestClassTEacher( userId: Types.ObjectId) {
+  async getLeaveRequestClassTEacher(userId: Types.ObjectId) {
     try {
-      const {_id:classId} = await this.classroomModel.findOne({classTeacherId:userId,isActive:true})
-      if(!classId){
-        throw new NotFoundException("Class not found")
+      const { _id: classId } = await this.classroomModel.findOne({
+        classTeacherId: userId,
+        isActive: true,
+      });
+      if (!classId) {
+        throw new NotFoundException('Class not found');
       }
-      const leave = await this.leaveModel.aggregate([{$match:{classId}},{$lookup:{from:"students",localField:"studentId",foreignField:"userId",as:"studentDetails"}},{$unwind:"$studentDetails"}  ])
-     return leave
+      const leave = await this.leaveModel.aggregate([
+        { $match: { classId } },
+        {
+          $lookup: {
+            from: 'students',
+            localField: 'studentId',
+            foreignField: 'userId',
+            as: 'studentDetails',
+          },
+        },
+        { $unwind: '$studentDetails' },
+      ]);
+      return leave;
     } catch (error) {
-      throw error
+      throw error;
     }
   }
 
-  async updateLeaveStatus( leaveId:string | Types.ObjectId,status: "approved" | "rejected",userId: Types.ObjectId) {
+  
+
+  async updateLeaveStatus(
+    leaveId: string | Types.ObjectId,
+    status: 'approved' | 'rejected',
+    userId: Types.ObjectId,
+  ) {
     try {
-      const {_id:classId} = await this.classroomModel.findOne({classTeacherId:userId,isActive:true})
-      if(!classId){
-        throw new NotFoundException("Class not found")
+      const { _id: classId } = await this.classroomModel.findOne({
+        classTeacherId: userId,
+        isActive: true,
+      });
+      if (!classId) {
+        throw new NotFoundException('Class not found');
       }
-      leaveId = new Types.ObjectId(leaveId)
-      const leave = await this.leaveModel.findOneAndUpdate({_id:leaveId,classId},{$set:{status}})
-      const user = await this.userModel.findOne({_id:leave.studentId})
-      const fcmTokens = user.fcmToken
-      if(fcmTokens){
+      leaveId = new Types.ObjectId(leaveId);
+      const leave = await this.leaveModel.findOneAndUpdate(
+        { _id: leaveId, classId },
+        { $set: { status } },
+      );
+      const user = await this.userModel.findOne({ _id: leave.studentId });
+      const fcmTokens = user.fcmToken;
+      if (fcmTokens) {
         fcmTokens.forEach(async (token) => {
-          await this.notificationService.sendNotification(token, "Leave Request", `Your leave request has been ${status}`)
-        })
+          await this.notificationService.sendNotification(
+            token,
+            'Leave Request',
+            `Your leave request has been ${status}`,
+          );
+        });
       }
-     return leave
+      return leave;
     } catch (error) {
-      throw error
+      throw error;
+    }
+  }
+
+  async deleteLeaveRequest(
+    leaveId: string | Types.ObjectId,
+    studentId: Types.ObjectId,
+    classId: Types.ObjectId
+  ) {
+    try {
+      leaveId = new Types.ObjectId(leaveId);
+      
+      const leaveRequest = await this.leaveModel.findOne({
+        _id: leaveId,
+        studentId,
+        classId,
+        status: 'pending'
+      });
+
+      if (!leaveRequest) {
+        throw new NotFoundException('Leave request not found or cannot be deleted');
+      }
+
+      const result = await this.leaveModel.deleteOne({ _id: leaveId });
+
+      if (result.deletedCount === 0) {
+        throw new BadRequestException('Failed to delete leave request');
+      }
+
+      return { message: 'Leave request deleted successfully' };
+    } catch (error) {
+      throw error;
     }
   }
 }

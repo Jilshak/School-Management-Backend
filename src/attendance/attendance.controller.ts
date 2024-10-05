@@ -171,6 +171,7 @@ export class AttendanceController {
     type: LeaveReqDto,
     description: 'Leave request data',
   })
+
   updateLeaveRequest(@Param("leaveId") leaveId:string,@Body() leaveReqDto: LeaveReqDto, @LoginUser("userId") studentId: Types.ObjectId,@LoginUser("classId") classId:Types.ObjectId) {
     return this.attendanceService.updateLeaveRequest(leaveId,leaveReqDto, studentId,classId);
   }
@@ -208,5 +209,20 @@ export class AttendanceController {
   @ApiResponse({ status: 400, description: 'Bad Request.' })
   updateLeaveRequestStatusChange(@Param("leaveId") leaveId:string,@Body() body:{status:"approved" | "rejected"},@LoginUser("userId") teacherId: Types.ObjectId) {
     return this.attendanceService.updateLeaveStatus( leaveId,body.status,teacherId);
+  }
+
+  @Delete('/leave-request/:id')
+  @Roles(UserRole.STUDENT)
+  @ApiOperation({ summary: 'Delete a leave request' })
+  @ApiParam({ name: 'id', type: 'string', description: 'ID of the leave request' })
+  @ApiResponse({ status: 200, description: 'The leave request has been successfully deleted.' })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiResponse({ status: 404, description: 'Leave request not found.' })
+  async deleteLeaveRequest(
+    @Param('id') id: string,
+    @LoginUser('userId') studentId: Types.ObjectId,
+    @LoginUser('classId') classId: Types.ObjectId
+  ) {
+    return this.attendanceService.deleteLeaveRequest(id, studentId, classId);
   }
 }
