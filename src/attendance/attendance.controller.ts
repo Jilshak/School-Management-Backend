@@ -189,8 +189,8 @@ export class AttendanceController {
 
   @Get("/leave-request/class-teacher")
   @Roles(UserRole.TEACHER)
-  @ApiOperation({ summary: 'Create leave request' })
-  @ApiResponse({ status: 201, description: 'The leave request has been successfully created.' })
+  @ApiOperation({ summary: 'Get all leave requests for the class' })
+  @ApiResponse({ status: 201, description: 'These are all the leave requests for the class.' })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
   getLeaveRequestClassTeacher( @LoginUser("userId") teacherId: Types.ObjectId) {
     return this.attendanceService.getLeaveRequestClassTEacher( teacherId);
