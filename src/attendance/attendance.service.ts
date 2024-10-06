@@ -451,13 +451,28 @@ export class AttendanceService {
     classId: Types.ObjectId,
   ) {
     try {
-      const existingLeave = await this.leaveModel.findOne({
-        studentId,
-        classId,
-        startDate: { $gte: leaveReqDto.startDate, $lte: leaveReqDto.endDate },
-      });
-      if (existingLeave) {
-        throw new BadRequestException('Leave request already exists');
+      const existingLeaves = await this.leaveModel
+        .find({
+          studentId,
+          classId,
+          startDate: { $gte: leaveReqDto.startDate, $lte: leaveReqDto.endDate },
+        })
+        .sort({ createdAt: -1 });
+
+      if (existingLeaves.length > 0) {
+        if (existingLeaves[0].status !== 'rejected') {
+          throw new BadRequestException('Leave request already exists');
+        }
+
+        const rejectedCount = existingLeaves.filter(
+          (leave) => leave.status === 'rejected',
+        ).length;
+
+        if (rejectedCount >= 5) {
+          throw new BadRequestException(
+            'You have exceeded the maximum number of leave requests for these dates',
+          );
+        }
       }
       const leave = new this.leaveModel({ ...leaveReqDto, studentId, classId });
       await leave.save();
@@ -505,7 +520,10 @@ export class AttendanceService {
     classId: Types.ObjectId,
   ) {
     try {
-      const leave = await this.leaveModel.find({ studentId, classId });
+      const leave = await this.leaveModel
+        .find({ studentId, classId })
+        .sort({ createdAt: -1 })
+        .lean();
       return leave;
     } catch (error) {
       throw error;
@@ -538,8 +556,6 @@ export class AttendanceService {
       throw error;
     }
   }
-
-  
 
   async updateLeaveStatus(
     leaveId: string | Types.ObjectId,
@@ -579,20 +595,22 @@ export class AttendanceService {
   async deleteLeaveRequest(
     leaveId: string | Types.ObjectId,
     studentId: Types.ObjectId,
-    classId: Types.ObjectId
+    classId: Types.ObjectId,
   ) {
     try {
       leaveId = new Types.ObjectId(leaveId);
-      
+
       const leaveRequest = await this.leaveModel.findOne({
         _id: leaveId,
         studentId,
         classId,
-        status: 'pending'
+        status: 'pending',
       });
 
       if (!leaveRequest) {
-        throw new NotFoundException('Leave request not found or cannot be deleted');
+        throw new NotFoundException(
+          'Leave request not found or cannot be deleted',
+        );
       }
 
       const result = await this.leaveModel.deleteOne({ _id: leaveId });
