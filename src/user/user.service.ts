@@ -22,6 +22,7 @@ import { Subject } from 'src/domains/schema/subject.schema';
 import { Classroom } from 'src/domains/schema/classroom.schema';
 import { CustomError } from '../common/errors/custom-error';
 import { HttpStatus } from '@nestjs/common';
+import { FileUploadUtil } from 'src/utils/file-upload.util';
 
 @Injectable()
 export class UserService {
@@ -93,7 +94,7 @@ export class UserService {
   async create(
     createUserDto: CreateUserDto,
     schoolId?: Types.ObjectId,
-  ): Promise<String> {
+  ): Promise<string> {
     let session: ClientSession | null = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -112,6 +113,7 @@ export class UserService {
           'At least one role must be specified',
         );
       }
+     
 
       // Handle STUDENT role
       if (createUserDto.roles.includes(UserRole.STUDENT)) {
@@ -153,16 +155,22 @@ export class UserService {
       });
 
       const savedUser = await createdUser.save({ session });
-
+      const uploadedDocuments = {
+        adhaarDocument: null,
+        pancardDocument: null
+      }
+       // Upload documents 
+       uploadedDocuments.adhaarDocument = await FileUploadUtil.uploadBase64File(createUserDto.adhaarDocument, "adhaar.jpg", savedUser.username )
+       uploadedDocuments.pancardDocument = await FileUploadUtil.uploadBase64File(createUserDto.pancardDocument, "pancard.jpg", savedUser.username )
       // Create role-specific documents
       if (!savedUser.roles.includes(UserRole.STUDENT)) {
-        await this.createStaffDocument(savedUser, createUserDto, session);
+        await this.createStaffDocument(savedUser, createUserDto, session, uploadedDocuments);
       }
       if (savedUser.roles.includes(UserRole.TEACHER)) {
-        await this.createTeacherDocument(savedUser, createUserDto, session);
+        await this.createTeacherDocument(savedUser, createUserDto, session, uploadedDocuments);
       }
       if (savedUser.roles.includes(UserRole.STUDENT)) {
-        await this.createStudentDocument(savedUser, createUserDto, session);
+        await this.createStudentDocument(savedUser, createUserDto, session, uploadedDocuments);
       }
 
       if (session) {
@@ -196,6 +204,7 @@ export class UserService {
     user: User,
     dto: CreateUserDto,
     session: ClientSession | null,
+    uploadedDocuments: any
   ) {
     const staffData = {
       userId: user._id,
@@ -218,8 +227,8 @@ export class UserService {
       pancardNumber: dto.pancardNumber,
       emergencyContactName: dto.emergencyContactName,
       emergencyContactNumber: dto.emergencyContactNumber,
-      pancardDocument: dto.pancardDocument,
-      adhaarDocument: dto.adhaarDocument,
+      pancardDocument: uploadedDocuments.pancardDocument,
+      adhaarDocument: uploadedDocuments.adhaarDocument
     };
     const createdStaff = new this.staffModel(staffData);
     await createdStaff.save({ session });
@@ -229,6 +238,7 @@ export class UserService {
     user: User,
     dto: CreateUserDto,
     session: ClientSession | null,
+    uploadedDocuments: any
   ) {
     try {
       const teacherData = {
@@ -236,7 +246,10 @@ export class UserService {
         subjects: dto.subjects
           ? dto.subjects.map((x) => new Types.ObjectId(x))
           : [],
+        adhaarDocument: uploadedDocuments.adhaarDocument,
+        pancardDocument: uploadedDocuments.pancardDocument
       };
+      console.log(teacherData)
       const createdTeacher = new this.teacherModel(teacherData);
       await createdTeacher.save({ session });
     } catch (err) {
@@ -248,6 +261,7 @@ export class UserService {
     user: User,
     dto: CreateUserDto,
     session: ClientSession | null,
+    uploadedDocuments: any
   ) {
     try {
       const studentData = {

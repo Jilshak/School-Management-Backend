@@ -5,6 +5,7 @@ import { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.int
 import { ErrorHandlerMiddleware } from './common/middleware/error-handler.middleware';
 import * as fs from 'fs-extra';
 import * as path from 'path';
+import { json, urlencoded } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -38,6 +39,10 @@ async function bootstrap() {
   } catch (error) {
     console.error('Failed to copy assets:', error.message);
   }
+  
+  app.use(json({ limit: '5mb' }));
+  app.use(urlencoded({ extended: true, limit: '5mb' }));
+
   await app.listen(3000);
 }
 bootstrap();
