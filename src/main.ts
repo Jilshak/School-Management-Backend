@@ -6,6 +6,9 @@ import { ErrorHandlerMiddleware } from './common/middleware/error-handler.middle
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { json, urlencoded } from 'express';
+import { Express } from 'express';
+import * as express from 'express';
+import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -42,6 +45,13 @@ async function bootstrap() {
   
   app.use(json({ limit: '5mb' }));
   app.use(urlencoded({ extended: true, limit: '5mb' }));
+
+  // Serve static files from the 'uploads' directory
+  const uploadPath = join(__dirname, '..', '..', 'uploads');
+  app.use('/uploads', express.static(uploadPath, {
+    index: false,
+    fallthrough: false,
+  }));
 
   await app.listen(3000);
 }
