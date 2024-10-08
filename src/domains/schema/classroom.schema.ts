@@ -8,7 +8,7 @@ export class Classroom {
   @Prop({ required: true })
   name: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: false })
+  @Prop({ type: Types.ObjectId, ref: 'User', required: false,unique:true })
   classTeacherId: Types.ObjectId;
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Subject' }] })

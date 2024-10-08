@@ -18,7 +18,9 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   @ApiBody({ type: SignInDto })
   async login(@Body() loginDto: { username: string; password: string }) {
+    console.log(loginDto);
     const user = await this.authService.validateUser(loginDto.username, loginDto.password);
+    console.log(user);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
