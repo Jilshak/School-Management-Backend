@@ -11,10 +11,6 @@ import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
 import { Types } from 'mongoose';
 import { UserRole } from 'src/domains/enums/user-roles.enum';
 import { HttpException, HttpStatus } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
-import * as fs from 'fs';
-import { buffer } from 'stream/consumers';
-import { FileUploadUtil } from '../utils/file-upload.util';
 
 @ApiTags('user')
 @ApiBearerAuth()

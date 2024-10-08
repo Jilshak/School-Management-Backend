@@ -23,6 +23,7 @@ import { Classroom } from 'src/domains/schema/classroom.schema';
 import { CustomError } from '../common/errors/custom-error';
 import { HttpStatus } from '@nestjs/common';
 import { FileUploadUtil } from 'src/utils/file-upload.util';
+import { WhatsAppService } from 'src/notification/whatsapp.service';
 
 @Injectable()
 export class UserService {
@@ -34,8 +35,8 @@ export class UserService {
     @InjectModel(Subject.name) private subjectModel: Model<Subject>,
     @InjectModel(Classroom.name) private classModel: Model<Classroom>,
     @InjectConnection() private connection: Connection,
+    private whatsAppService: WhatsAppService,
   ) {}
-
   private async supportsTransactions(): Promise<boolean> {
     try {
       await this.connection.db.admin().command({ replSetGetStatus: 1 });
@@ -91,6 +92,8 @@ export class UserService {
     const password = this.generatePassword();
     return { username, password };
   }
+
+
   async create(
     createUserDto: CreateUserDto,
     schoolId?: Types.ObjectId,
@@ -157,11 +160,44 @@ export class UserService {
       const savedUser = await createdUser.save({ session });
       const uploadedDocuments = {
         adhaarDocument: null,
-        pancardDocument: null
+        birthCertificateDocument: null,
+        pancardDocument: null,
+        tcDocument: null
+      };
+
+      // Upload documents 
+      if (createUserDto.adhaarDocument) {
+        uploadedDocuments.adhaarDocument = await FileUploadUtil.uploadBase64File(
+          createUserDto.adhaarDocument,
+          `${savedUser.username}_adhaar`,
+          savedUser.username
+        );
       }
-       // Upload documents 
-       uploadedDocuments.adhaarDocument = await FileUploadUtil.uploadBase64File(createUserDto.adhaarDocument, "adhaar.jpg", savedUser.username )
-       uploadedDocuments.pancardDocument = await FileUploadUtil.uploadBase64File(createUserDto.pancardDocument, "pancard.jpg", savedUser.username )
+
+      if (createUserDto.birthCertificateDocument) {
+        uploadedDocuments.birthCertificateDocument = await FileUploadUtil.uploadBase64File(
+          createUserDto.birthCertificateDocument,
+          `${savedUser.username}_birth_certificate`,
+          savedUser.username
+        );
+      }
+
+      if (createUserDto.pancardDocument) {
+        uploadedDocuments.pancardDocument = await FileUploadUtil.uploadBase64File(
+          createUserDto.pancardDocument,
+          `${savedUser.username}_pancard`,
+          savedUser.username
+        );
+      }
+
+      if (createUserDto.tcDocument) {
+        uploadedDocuments.tcDocument = await FileUploadUtil.uploadBase64File(
+          createUserDto.tcDocument,
+          `${savedUser.username}_tc`,
+          savedUser.username
+        );
+      }
+
       // Create role-specific documents
       if (!savedUser.roles.includes(UserRole.STUDENT)) {
         await this.createStaffDocument(savedUser, createUserDto, session, uploadedDocuments);
@@ -176,6 +212,10 @@ export class UserService {
       if (session) {
         await session.commitTransaction();
       }
+
+      // Send WhatsApp messages with username and password
+      await this.sendCredentialsViaWhatsApp(createUserDto, username, password);
+
       return 'User Created';
     } catch (error) {
       if (session) {
@@ -196,6 +236,23 @@ export class UserService {
       if (session) {
         await session.endSession();
       }
+    }
+  }
+
+  private async sendCredentialsViaWhatsApp(
+    createUserDto: CreateUserDto,
+    username: string,
+    password: string,
+  ) {
+
+    // Send to user's contact number
+    if (createUserDto.contactNumber) {
+      await this.whatsAppService.sendMessage(createUserDto.contactNumber, username, password);
+    }
+
+    // Send to guardian's contact number if it exists
+    if (createUserDto.parentsDetails?.guardianContactNumber) {
+      await this.whatsAppService.sendMessage(createUserDto.parentsDetails.guardianContactNumber, username, password);
     }
   }
 
@@ -284,9 +341,9 @@ export class UserService {
         adhaarNumber: dto.adhaarNumber,
         emergencyContactName: dto.emergencyContactName,
         emergencyContactNumber: dto.emergencyContactNumber,
-        adhaarDocument: dto.adhaarDocument,
+        adhaarDocument: uploadedDocuments.adhaarDocument,
         state: dto.state,
-        birthCertificateDocument: dto.birthCertificateDocument,
+        birthCertificateDocument: uploadedDocuments.birthCertificateDocument,
         tcNumber: dto.tcNumber,
         tcDocument: dto.tcDocument,
       };

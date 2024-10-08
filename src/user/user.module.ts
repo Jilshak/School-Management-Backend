@@ -9,6 +9,7 @@ import { Teacher, TeacherSchema } from '../domains/schema/teacher.schema';
 import { Subject, SubjectSchema } from '../domains/schema/subject.schema';
 import { GuardsModule } from '../guards/guards.module';
 import { Classroom, ClassroomSchema } from 'src/domains/schema/classroom.schema';
+import { WhatsAppService } from 'src/notification/whatsapp.service';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { Classroom, ClassroomSchema } from 'src/domains/schema/classroom.schema'
     GuardsModule,
   ],
   controllers: [UserController],
-  providers: [UserService],
+  providers: [UserService, WhatsAppService],
   exports: [UserService],
 })
 export class UserModule {}
