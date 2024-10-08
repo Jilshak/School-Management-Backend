@@ -44,6 +44,8 @@ lerna-debug.log*
 .env.local
 fcmAccountCredentials.json
 
+/uploads
+
 # temp directory
 .temp
 .tmp

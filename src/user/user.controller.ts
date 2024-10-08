@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, Patch, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, Patch, ValidationPipe, UseInterceptors, UploadedFile, UploadedFiles } from '@nestjs/common';
 import { UserService } from './user.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../shared/guards/roles.guard';
@@ -25,7 +25,7 @@ export class UserController {
   @ApiResponse({ status: 201, description: 'The user has been successfully created.', type: String })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
   @ApiBody({ type: CreateUserDto })
-  async create(@Body(ValidationPipe) createUserDto: CreateUserDto, @LoginUser("schoolId") schoolId) {
+  async create(@Body(ValidationPipe) createUserDto: CreateUserDto, @LoginUser("schoolId") schoolId:any) {
     try {
       const res = await this.userService.create(createUserDto, schoolId);
       return { status: 201, description: res };
