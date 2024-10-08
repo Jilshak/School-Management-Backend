@@ -309,8 +309,17 @@ export class AccountsService {
         { $unwind: '$student' },
         {
           $lookup: {
+            from: 'users',
+            localField: 'studentId',
+            foreignField: '_id',
+            as: 'std',
+          },
+        },
+        { $unwind: '$std' },
+        {
+          $lookup: {
             from: 'classrooms',
-            localField: 'student.classId',
+            localField: 'std.classId',
             foreignField: '_id',
             as: 'classes',
           },
@@ -334,7 +343,7 @@ export class AccountsService {
         },
       ]);
 
-      const paymentDetails = accounts.fees.map((fee: any) => ({
+      const paymentDetails = accounts?.fees?.map((fee: any) => ({
         name: fee.dueDateId ? fee.name + ' (Payment Due)' : fee.name,
         quantity: fee.quantity || 1,
         description: fee.description || 'N/A',

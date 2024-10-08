@@ -28,7 +28,7 @@ async function bootstrap() {
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
-  const source = path.join(__dirname,"..","src", 'domains', 'pdfTemplates','billAndReciept.html');
+  const source = path.join(__dirname,"..","..","src", 'domains', 'pdfTemplates','billAndReciept.html');
   const destination = path.join(__dirname, 'domains', 'pdfTemplates');
   console.log('Source:', source);
   console.log('Destination:', destination);

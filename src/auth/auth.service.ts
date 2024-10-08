@@ -36,7 +36,7 @@ export class AuthService {
         if(classTeacherOf){
           return {...result,classTacherOf: classTeacherOf._id}
         }
-      }
+      } 
       return result;
     }
     return null;

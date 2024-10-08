@@ -73,6 +73,15 @@ export class TimetableController {
     return this.timetableService.findTeacherTimetable(userId,schoolId);
   }
 
+  @Get('student')
+  @Roles(UserRole.STUDENT)
+  @ApiOperation({ summary: 'Get a timetable by id' })
+  @ApiResponse({ status: 200, description: 'Return the timetable.' })
+  @ApiResponse({ status: 404, description: 'Timetable not found.' })
+  findOneForStudent(@LoginUser('classId') id: string,@LoginUser("schoolId") schoolId:Types.ObjectId) {
+    return this.timetableService.findOne(id,schoolId);
+  }
+
   @Get(':classId')
   @Roles('admin', 'teacher', UserRole.STUDENT)
   @ApiOperation({ summary: 'Get a timetable by id' })
@@ -82,6 +91,8 @@ export class TimetableController {
   findOne(@Param('classId') id: string,@LoginUser("schoolId") schoolId:Types.ObjectId) {
     return this.timetableService.findOne(id,schoolId);
   }
+
+
 
 
 
