@@ -93,6 +93,31 @@ export class UserService {
     return { username, password };
   }
 
+  private async uploadDocuments(savedUser: User, createUserDto: CreateUserDto): Promise<Record<string, string | null>> {
+    const documentTypes = [
+      'profilePhoto',
+      'adhaarDocument',
+      'birthCertificateDocument',
+      'pancardDocument',
+      'tcDocument'
+    ];
+
+    const uploadedDocuments: Record<string, string | null> = {};
+
+    for (const docType of documentTypes) {
+      if (createUserDto[docType]) {
+        uploadedDocuments[docType] = await FileUploadUtil.uploadBase64File(
+          createUserDto[docType],
+          `${savedUser.username}_${docType}`,
+          savedUser.username
+        );
+      } else {
+        uploadedDocuments[docType] = null;
+      }
+    }
+
+    return uploadedDocuments;
+  }
 
   async create(
     createUserDto: CreateUserDto,
@@ -158,45 +183,7 @@ export class UserService {
       });
 
       const savedUser = await createdUser.save({ session });
-      const uploadedDocuments = {
-        adhaarDocument: null,
-        birthCertificateDocument: null,
-        pancardDocument: null,
-        tcDocument: null
-      };
-
-      // Upload documents 
-      if (createUserDto.adhaarDocument) {
-        uploadedDocuments.adhaarDocument = await FileUploadUtil.uploadBase64File(
-          createUserDto.adhaarDocument,
-          `${savedUser.username}_adhaar`,
-          savedUser.username
-        );
-      }
-
-      if (createUserDto.birthCertificateDocument) {
-        uploadedDocuments.birthCertificateDocument = await FileUploadUtil.uploadBase64File(
-          createUserDto.birthCertificateDocument,
-          `${savedUser.username}_birth_certificate`,
-          savedUser.username
-        );
-      }
-
-      if (createUserDto.pancardDocument) {
-        uploadedDocuments.pancardDocument = await FileUploadUtil.uploadBase64File(
-          createUserDto.pancardDocument,
-          `${savedUser.username}_pancard`,
-          savedUser.username
-        );
-      }
-
-      if (createUserDto.tcDocument) {
-        uploadedDocuments.tcDocument = await FileUploadUtil.uploadBase64File(
-          createUserDto.tcDocument,
-          `${savedUser.username}_tc`,
-          savedUser.username
-        );
-      }
+      const uploadedDocuments = await this.uploadDocuments(savedUser, createUserDto);
 
       // Create role-specific documents
       if (!savedUser.roles.includes(UserRole.STUDENT)) {
