@@ -21,6 +21,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { generateReciept } from 'src/domains/pdfTemplates/billAndReciept';
 import { School } from 'src/domains/schema/school.schema';
+import { Expense } from '../domains/schema/expense.schema';
+import { CreateExpenseDto } from './dto/create-expense.dto';
+import { UpdateExpenseDto } from './dto/update-expense.dto';
+import { ExpenseCategory } from '../domains/schema/expense-category.schema';
+import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
+import { UpdateExpenseCategoryDto } from './dto/update-expense-category.dto';
 
 @Injectable()
 export class AccountsService {
@@ -34,6 +40,9 @@ export class AccountsService {
     @InjectModel(FeeStructure.name)
     private feeStructureModel: Model<FeeStructure>,
     @InjectConnection() private connection: Connection,
+    @InjectModel(Expense.name) private expenseModel: Model<Expense>,
+    @InjectModel(ExpenseCategory.name)
+    private expenseCategoryModel: Model<ExpenseCategory>,
   ) {}
 
   private async supportsTransactions(): Promise<boolean> {
@@ -174,7 +183,7 @@ export class AccountsService {
 
       const [accounts] = await this.accountModel
         .aggregate([
-          { $match: { schoolId,_id:new Types.ObjectId(id) } },
+          { $match: { schoolId, _id: new Types.ObjectId(id) } },
           {
             $lookup: {
               from: 'students',
@@ -236,7 +245,7 @@ export class AccountsService {
 
       const accounts = await this.accountModel
         .aggregate([
-          { $match: { schoolId,studentId:new Types.ObjectId(id) } },
+          { $match: { schoolId, studentId: new Types.ObjectId(id) } },
         ])
         .session(session)
         .exec();
@@ -257,7 +266,12 @@ export class AccountsService {
     }
   }
 
-  async updateAccount(id: string, updateAccountDto: UpdateAccountDto, schoolId: Types.ObjectId, userId: Types.ObjectId) {
+  async updateAccount(
+    id: string,
+    updateAccountDto: UpdateAccountDto,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ) {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -276,23 +290,25 @@ export class AccountsService {
       updateAccountDto.studentId = new Types.ObjectId(
         updateAccountDto.studentId,
       );
-      const account = await this.accountModel.updateOne({_id:new Types.ObjectId(id),schoolId},{...updateAccountDto,updatedBy:new Types.ObjectId(userId)})
+      const account = await this.accountModel.updateOne(
+        { _id: new Types.ObjectId(id), schoolId },
+        { ...updateAccountDto, updatedBy: new Types.ObjectId(userId) },
+      );
       if (supportsTransactions) {
         session = await this.connection.startSession();
         session.startTransaction();
       }
-      return account
-    }catch(err){
+      return account;
+    } catch (err) {
       if (session) {
         await session.abortTransaction();
       }
       throw new InternalServerErrorException('Failed to update account');
-    }finally{
+    } finally {
       if (session) {
         session.endSession();
       }
     }
-
   }
   async generatePaymentReciept(id: string, schoolId: Types.ObjectId) {
     try {
@@ -372,7 +388,7 @@ export class AccountsService {
           name: school.name,
           phone: school.primaryPhone,
         },
-        accounts._id.toString()
+        accounts._id.toString(),
       );
       return html;
     } catch (error) {
@@ -1408,50 +1424,59 @@ export class AccountsService {
         .session(session)
         .exec();
 
-      const duePaymentIds = paymentDue.flatMap(due => due.feeDetails.map(fee => fee._id));
+      const duePaymentIds = paymentDue.flatMap((due) =>
+        due.feeDetails.map((fee) => fee._id),
+      );
 
       const accounts = await this.accountModel.aggregate([
         {
           $match: {
             schoolId: new Types.ObjectId(schoolId),
             studentId: new Types.ObjectId(userId),
-            "fees.duePaymentId": { $in: duePaymentIds }
+            'fees.duePaymentId': { $in: duePaymentIds },
           },
         },
         {
-          $unwind: "$fees"
+          $unwind: '$fees',
         },
         {
           $match: {
-            "fees.duePaymentId": { $in: duePaymentIds.map(id => new Types.ObjectId(id)) }
-          }
+            'fees.duePaymentId': {
+              $in: duePaymentIds.map((id) => new Types.ObjectId(id)),
+            },
+          },
         },
         {
           $group: {
-            _id: "$fees.duePaymentId",
-            totalPaid: { $sum: "$fees.amount" }
-          }
-        }
+            _id: '$fees.duePaymentId',
+            totalPaid: { $sum: '$fees.amount' },
+          },
+        },
       ]);
-       
-    
-        const calculateBalance = paymentDue.map((dues) => {
-          const balanceDues = dues.feeDetails.map((fee) => {
-            const paidAmount = accounts.find(account => account._id.toString() === fee._id.toString())?.totalPaid || 0;
-            const remainingBalance = fee.amount * fee.count - paidAmount;
-            return {
-              ...fee,
-              paidAmount,
-              remainingBalance
-            };
-          });
 
+      const calculateBalance = paymentDue.map((dues) => {
+        const balanceDues = dues.feeDetails.map((fee) => {
+          const paidAmount =
+            accounts.find(
+              (account) => account._id.toString() === fee._id.toString(),
+            )?.totalPaid || 0;
+          const remainingBalance = fee.amount * fee.count - paidAmount;
           return {
-            ...dues,
-            feeDetails: balanceDues,
-            totalRemainingBalance: balanceDues.reduce((sum, fee) => sum + fee.remainingBalance, 0)
+            ...fee,
+            paidAmount,
+            remainingBalance,
           };
         });
+
+        return {
+          ...dues,
+          feeDetails: balanceDues,
+          totalRemainingBalance: balanceDues.reduce(
+            (sum, fee) => sum + fee.remainingBalance,
+            0,
+          ),
+        };
+      });
 
       if (!paymentDue) {
         throw new NotFoundException(`Payment Due with ID ${userId} not found`);
@@ -1721,6 +1746,437 @@ export class AccountsService {
       if (session) {
         session.endSession();
       }
+    }
+  }
+
+  async createExpense(
+    createExpenseDto: CreateExpenseDto,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ): Promise<Expense> {
+    try {
+      const expense = new this.expenseModel({
+        ...createExpenseDto,
+        category: new Types.ObjectId(createExpenseDto.category),
+        schoolId,
+        createdBy: userId,
+        updatedBy: userId,
+      });
+      return expense.save();
+    } catch (error) {
+      console.log(error);
+      throw new InternalServerErrorException('Failed to create expense');
+    }
+  }
+
+  async findAllExpenses(
+    schoolId: Types.ObjectId,
+    page: number = 1,
+    limit: number = 10,
+    startDate?: Date,
+    endDate?: Date,
+    category?: string,
+    fullData?: boolean,
+  ): Promise<{ expenses: Expense[]; total: number }> {
+    try {
+      page = parseInt(page.toString()) || 1;
+      limit = parseInt(limit.toString()) || 10;
+
+      const matchStage: any = {
+        schoolId,
+        isActive: true,
+      };
+
+      if (startDate && endDate) {
+        matchStage.date = {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate),
+        };
+      }
+
+      if (category) {
+        matchStage.category = new Types.ObjectId(category);
+      }
+
+      const aggregationPipeline = [
+        { $match: matchStage },
+        {
+          $lookup: {
+            from: 'expensecategories',
+            localField: 'category',
+            foreignField: '_id',
+            as: 'category',
+          },
+        },
+        { $unwind: '$category' },
+        {
+          $project: {
+            description: 1,
+            amount: 1,
+            date: 1,
+            category: '$category.name',
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        },
+        {
+          $facet: {
+            expenses: [{ $skip: (page - 1) * limit }, { $limit: limit }],
+            totalCount: [{ $count: 'count' }],
+          },
+        },
+      ];
+
+      const result = await this.expenseModel
+        .aggregate(aggregationPipeline)
+        .exec();
+
+      const expenses = result[0].expenses;
+      const total = result[0].totalCount[0] ? result[0].totalCount[0].count : 0;
+
+      return { expenses, total };
+    } catch (error) {
+      console.log(error);
+      throw new InternalServerErrorException('Failed to find expenses');
+    }
+  }
+
+  async findAllLedger(
+    schoolId: Types.ObjectId,
+    startDate?: Date,
+    endDate?: Date,
+    fullData?: boolean,
+  ) {
+    try {
+      const matchStage: any = {
+        schoolId,
+        isActive: true,
+      };
+
+      if (startDate && endDate) {
+        matchStage.date = {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate),
+        };
+      }
+
+      const expense = await this.expenseModel.aggregate([
+        { $match: { ...matchStage } },
+        {
+          $lookup: {
+            from: 'expensecategories',
+            localField: 'category',
+            foreignField: '_id',
+            as: 'category',
+          },
+        },
+        { $unwind: '$category' },
+        {
+          $project: {
+            description: 1,
+            amount: 1,
+            date: 1,
+            category: '$category.name',
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        },
+      ]);
+      if (startDate && endDate) {
+        delete matchStage.date;
+        matchStage.paymentDate = {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate),
+        };
+      }
+      let accounts = await this.accountModel.find(matchStage);
+      const feeType = await this.feeModel.find({ schoolId });
+      const feeTypeIdTemp: Types.ObjectId[] = [];
+
+      accounts.forEach((account) => {
+        account.fees.forEach((fee) => {
+          if (fee.duePaymentId) {
+            feeTypeIdTemp.push(fee.duePaymentId);
+          }
+        });
+      });
+      const feeTypeTemp: any = await this.paymentDueModel.find({
+        'feeDetails._id': { $in: feeTypeIdTemp },
+        schoolId,
+      });
+      accounts = accounts.map((account) => {
+        account.fees = account.fees.map((fee) => {
+          if (fee.duePaymentId) {
+            fee.feeTypeId = feeTypeTemp
+              .map((feeType) => {
+               
+                return feeType.feeDetails.find(
+                  (a) => a._id.toString() === fee.duePaymentId.toString(),
+                )?.feeType;
+              })
+              .filter((a) => a)[0];
+          }
+          return fee;
+        });
+        return account;
+      });
+      const income = new Map();
+
+      accounts.forEach((account) => {
+        account.fees.forEach((fee) => {
+          const feeTypeName = feeType.find(
+            (feeType) => feeType._id.toString() === fee.feeTypeId.toString(),
+          ).name;
+          if (income.has(feeTypeName)) {
+            const temp = income.get(feeTypeName);
+            temp.amount += fee.amount;
+            income.set(feeTypeName, temp);
+          } else {
+            income.set(feeTypeName, {
+              amount: fee.amount,
+              description: 'income',
+            });
+          }
+        });
+      });
+
+      const expenseGrouped = new Map();
+
+      expense.forEach((expense) => {
+      
+        if (expenseGrouped.has(expense.category)) {
+          const temp = expenseGrouped.get(expense.category);
+          temp.amount += expense.amount;
+          expenseGrouped.set(expense.category, temp);
+        } else {
+          expenseGrouped.set(expense.category, { amount: expense.amount, description: 'expense' });
+        }
+      });
+
+      const data = [...Array.from(expenseGrouped.entries()).map(([category, { amount, description }]) => ({
+        category,
+        amount,
+        description,
+      })),...Array.from(income.entries()).map(([category, { amount, description }]) => ({
+        category,
+        amount,
+        description,
+      }))];
+      return data;
+    } catch (error) {
+      console.log(error);
+      throw new InternalServerErrorException('Failed to find expenses');
+    }
+  }
+
+  async findAllDayBook(
+    schoolId: Types.ObjectId,
+    startDate?: Date,
+    endDate?: Date,
+    fullData?: boolean,
+  ) {
+    try {
+      const matchStage: any = {
+        schoolId,
+        isActive: true,
+      };
+
+      if (startDate && endDate) {
+        matchStage.date = {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate),
+        };
+      }
+
+      let expenses = await this.expenseModel.aggregate([
+        { $match: matchStage },
+        {
+          $lookup: {
+            from: 'expensecategories',
+            localField: 'category',
+            foreignField: '_id',
+            as: 'category',
+          },
+        },
+        { $unwind: '$category' },
+        {
+          $project: {
+            description: 1,
+            amount: 1,
+            date: 1,
+            category: '$category.name',
+            createdAt: 1,
+            updatedAt: 1,
+            type: { $literal: 'expense' },
+          },
+        },
+      ]);
+
+      const accountMatchStage = { ...matchStage };
+      if (startDate && endDate) {
+        delete accountMatchStage.date;
+        accountMatchStage.paymentDate = {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate),
+        };
+      }
+
+      let accounts = await this.accountModel.aggregate([
+        { $match: accountMatchStage },
+        { $unwind: '$fees' },
+        {
+          $lookup: {
+            from: 'feetypes',
+            localField: 'fees.feeTypeId',
+            foreignField: '_id',
+            as: 'feeType',
+          },
+        },
+        { $unwind: '$feeType' },
+        {
+          $project: {
+            description: '$feeType.name',
+            amount: '$fees.amount',
+            date: '$paymentDate',
+            category: '$feeType.name',
+            createdAt: 1,
+            updatedAt: 1,
+            type: { $literal: 'income' },
+          },
+        },
+      ]);
+
+      let data = [...expenses, ...accounts];
+
+      // Sort the data by date
+      data.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      return data;
+    } catch (error) {
+      console.log(error);
+      throw new InternalServerErrorException('Failed to find day book data');
+    }
+  }
+
+  async findExpenseById(
+    id: string,
+    schoolId: Types.ObjectId,
+  ): Promise<Expense> {
+    const expense = await this.expenseModel
+      .findOne({ _id: id, schoolId })
+      .exec();
+    if (!expense) {
+      throw new NotFoundException(`Expense with ID ${id} not found`);
+    }
+    return expense;
+  }
+
+  async updateExpense(
+    id: string,
+    updateExpenseDto: UpdateExpenseDto,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ): Promise<Expense> {
+    const updatedExpense = await this.expenseModel
+      .findOneAndUpdate(
+        { _id: id, schoolId },
+        {
+          ...updateExpenseDto,
+          category: new Types.ObjectId(updateExpenseDto.category),
+          updatedBy: userId,
+        },
+        { new: true },
+      )
+      .exec();
+
+    if (!updatedExpense) {
+      throw new NotFoundException(`Expense with ID ${id} not found`);
+    }
+    return updatedExpense;
+  }
+
+  async deleteExpense(
+    id: string,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ): Promise<void> {
+    const result = await this.expenseModel
+      .updateOne(
+        { _id: id, schoolId },
+        { $set: { isActive: false, updatedBy: userId } },
+      )
+      .exec();
+    if (result.modifiedCount === 0) {
+      throw new NotFoundException(`Expense with ID ${id} not found`);
+    }
+  }
+
+  async createExpenseCategory(
+    createExpenseCategoryDto: CreateExpenseCategoryDto,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ): Promise<ExpenseCategory> {
+    const expenseCategory = new this.expenseCategoryModel({
+      ...createExpenseCategoryDto,
+      schoolId,
+      createdBy: userId,
+      updatedBy: userId,
+    });
+    return expenseCategory.save();
+  }
+
+  async findAllExpenseCategories(
+    schoolId: Types.ObjectId,
+  ): Promise<ExpenseCategory[]> {
+    return this.expenseCategoryModel.find({ schoolId, isActive: true }).exec();
+  }
+
+  async findExpenseCategoryById(
+    id: string,
+    schoolId: Types.ObjectId,
+  ): Promise<ExpenseCategory> {
+    const expenseCategory = await this.expenseCategoryModel
+      .findOne({ _id: id, schoolId, isActive: true })
+      .exec();
+    if (!expenseCategory) {
+      throw new NotFoundException(`Expense category with ID ${id} not found`);
+    }
+    return expenseCategory;
+  }
+
+  async updateExpenseCategory(
+    id: string,
+    updateExpenseCategoryDto: UpdateExpenseCategoryDto,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ): Promise<ExpenseCategory> {
+    const updatedExpenseCategory = await this.expenseCategoryModel
+      .findOneAndUpdate(
+        { _id: id, schoolId, isActive: true },
+        { ...updateExpenseCategoryDto, updatedBy: userId },
+        { new: true },
+      )
+      .exec();
+
+    if (!updatedExpenseCategory) {
+      throw new NotFoundException(`Expense category with ID ${id} not found`);
+    }
+    return updatedExpenseCategory;
+  }
+
+  async deleteExpenseCategory(
+    id: string,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ): Promise<void> {
+    const result = await this.expenseCategoryModel
+      .updateOne(
+        { _id: id, schoolId, isActive: true },
+        { isActive: false, updatedBy: userId },
+      )
+      .exec();
+    if (result.modifiedCount === 0) {
+      throw new NotFoundException(`Expense category with ID ${id} not found`);
     }
   }
 }

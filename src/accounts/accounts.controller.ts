@@ -17,6 +17,10 @@ import { UpdateFeeStructureDto } from './dto/update-fee-structure.dto';
 import { CreatePaymentDueDto } from './dto/create-payment-due.dto';
 import { UpdatePaymentDueDto } from './dto/update-payment-due.dto';
 import { PaymentDue } from 'src/domains/schema/paymentdue.schema';
+import { CreateExpenseDto } from './dto/create-expense.dto';
+import { UpdateExpenseDto } from './dto/update-expense.dto';
+import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
+import { UpdateExpenseCategoryDto } from './dto/update-expense-category.dto';
 
 @ApiTags('accounts')
 @ApiBearerAuth()
@@ -301,6 +305,64 @@ export class AccountsController {
     return { message: 'Payment due deleted successfully' };
   }
 
+  @Get('expense-categories')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Get all expense categories' })
+  @ApiResponse({ status: 200, description: 'Returns all expense categories.' })
+  getExpenseCategories(@LoginUser('schoolId') schoolId: Types.ObjectId) {
+    return this.accountsService.findAllExpenseCategories(schoolId);
+  }
+
+  @Get('expenses')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Get all expenses' })
+  @ApiResponse({ status: 200, description: 'Returns all expenses.' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'startDate', required: false, type: Date })
+  @ApiQuery({ name: 'endDate', required: false, type: Date })
+  @ApiQuery({ name: 'category', required: false, type: String })
+  @ApiQuery({ name: 'fullData', required: false, type: Boolean })
+  getExpenses(
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('startDate') startDate?: Date,
+    @Query('endDate') endDate?: Date,
+    @Query('category') category?: string,
+    @Query('fullData') fullData?: boolean,
+  ) {
+    return this.accountsService.findAllExpenses(schoolId, page, limit, startDate, endDate, category,fullData);
+  }
+
+  @Get('ledger')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Get all expenses' })
+  @ApiResponse({ status: 200, description: 'Returns all expenses.' })
+  @ApiQuery({ name: 'startDate', required: false, type: Date })
+  @ApiQuery({ name: 'endDate', required: false, type: Date })
+  getLedger(
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @Query('startDate') startDate?: Date,
+    @Query('endDate') endDate?: Date,
+  ) {
+    return this.accountsService.findAllLedger(schoolId, startDate, endDate);
+  }
+
+  @Get('day-book')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Get all expenses' })
+  @ApiResponse({ status: 200, description: 'Returns all expenses.' })
+  @ApiQuery({ name: 'startDate', required: false, type: Date })
+  @ApiQuery({ name: 'endDate', required: false, type: Date })
+  getDayBook(
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @Query('startDate') startDate?: Date,
+    @Query('endDate') endDate?: Date,
+  ) {
+    return this.accountsService.findAllDayBook(schoolId, startDate, endDate);
+  }
+
   @Get(":id")
   @Roles('admin', 'accountant')
   @ApiOperation({ summary:'Get all accounts'})
@@ -318,4 +380,115 @@ export class AccountsController {
   updateAccounts(@Param("id") id:string,@Body(ValidationPipe) updateAccountDto:UpdateAccountDto,@LoginUser("schoolId") schoolId:Types.ObjectId,@LoginUser("userId") userId:Types.ObjectId) {
     return this.accountsService.updateAccount(id,updateAccountDto,schoolId,userId);
   } 
+
+  @Post('expenses')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Create a new expense' })
+  @ApiResponse({ status: 201, description: 'The expense has been successfully created.' })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiBody({ type: CreateExpenseDto })
+  createExpense(
+    @Body(ValidationPipe) createExpenseDto: CreateExpenseDto,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @LoginUser('userId') userId: Types.ObjectId
+  ) {
+    return this.accountsService.createExpense(createExpenseDto, schoolId, userId);
+  }
+
+
+
+  @Get('expenses/:id')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Get an expense by ID' })
+  @ApiResponse({ status: 200, description: 'Returns the expense.' })
+  @ApiResponse({ status: 404, description: 'Expense not found.' })
+  @ApiParam({ name: 'id', type: String })
+  getExpenseById(@Param('id') id: string, @LoginUser('schoolId') schoolId: Types.ObjectId) {
+    return this.accountsService.findExpenseById(id, schoolId);
+  }
+
+  @Put('expenses/:id')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Update an expense' })
+  @ApiResponse({ status: 200, description: 'The expense has been successfully updated.' })
+  @ApiResponse({ status: 404, description: 'Expense not found.' })
+  @ApiParam({ name: 'id', type: String })
+  @ApiBody({ type: UpdateExpenseDto })
+  updateExpense(
+    @Param('id') id: string,
+    @Body(ValidationPipe) updateExpenseDto: UpdateExpenseDto,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @LoginUser('userId') userId: Types.ObjectId
+  ) {
+    return this.accountsService.updateExpense(id, updateExpenseDto, schoolId, userId);
+  }
+
+  @Delete('expenses/:id')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Delete an expense' })
+  @ApiResponse({ status: 200, description: 'The expense has been successfully deleted.' })
+  @ApiResponse({ status: 404, description: 'Expense not found.' })
+  @ApiParam({ name: 'id', type: String })
+  deleteExpense(
+    @Param('id') id: string,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @LoginUser('userId') userId: Types.ObjectId
+  ) {
+    return this.accountsService.deleteExpense(id, schoolId, userId);
+  }
+
+  @Post('expense-categories')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Create a new expense category' })
+  @ApiResponse({ status: 201, description: 'The expense category has been successfully created.' })
+  @ApiBody({ type: CreateExpenseCategoryDto })
+  createExpenseCategory(
+    @Body(ValidationPipe) createExpenseCategoryDto: CreateExpenseCategoryDto,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @LoginUser('userId') userId: Types.ObjectId
+  ) {
+    return this.accountsService.createExpenseCategory(createExpenseCategoryDto, schoolId, userId);
+  }
+
+ 
+
+  @Get('expense-categories/:id')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Get an expense category by ID' })
+  @ApiResponse({ status: 200, description: 'Returns the expense category.' })
+  @ApiResponse({ status: 404, description: 'Expense category not found.' })
+  @ApiParam({ name: 'id', type: String })
+  getExpenseCategoryById(@Param('id') id: string, @LoginUser('schoolId') schoolId: Types.ObjectId) {
+    return this.accountsService.findExpenseCategoryById(id, schoolId);
+  }
+
+  @Put('expense-categories/:id')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Update an expense category' })
+  @ApiResponse({ status: 200, description: 'The expense category has been successfully updated.' })
+  @ApiResponse({ status: 404, description: 'Expense category not found.' })
+  @ApiParam({ name: 'id', type: String })
+  @ApiBody({ type: UpdateExpenseCategoryDto })
+  updateExpenseCategory(
+    @Param('id') id: string,
+    @Body(ValidationPipe) updateExpenseCategoryDto: UpdateExpenseCategoryDto,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @LoginUser('userId') userId: Types.ObjectId
+  ) {
+    return this.accountsService.updateExpenseCategory(id, updateExpenseCategoryDto, schoolId, userId);
+  }
+
+  @Delete('expense-categories/:id')
+  @Roles('admin', 'accountant')
+  @ApiOperation({ summary: 'Delete an expense category' })
+  @ApiResponse({ status: 200, description: 'The expense category has been successfully deleted.' })
+  @ApiResponse({ status: 404, description: 'Expense category not found.' })
+  @ApiParam({ name: 'id', type: String })
+  deleteExpenseCategory(
+    @Param('id') id: string,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @LoginUser('userId') userId: Types.ObjectId
+  ) {
+    return this.accountsService.deleteExpenseCategory(id, schoolId, userId);
+  }
 }
