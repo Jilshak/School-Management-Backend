@@ -525,6 +525,7 @@ export class UserService {
   }
 
   async findOne(id: string, schoolId: Types.ObjectId): Promise<User> {
+    console.log(id)
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -584,7 +585,6 @@ export class UserService {
           .session(session)
           .lean();
         user = { ...user, ...staffDetails };
-
         if (user.roles.includes(UserRole.TEACHER)) {
           const teacherDetails = await this.teacherModel
             .findOne({
@@ -624,6 +624,7 @@ export class UserService {
       }
       return user;
     } catch (error) {
+      console.log(error)
       if (session) {
         await session.abortTransaction();
       }
@@ -905,7 +906,16 @@ export class UserService {
     }
   }
 
-  async findAllStudents(): Promise<Student[]> {
+  async findAllStudents(
+    schoolId: Types.ObjectId,
+    page: number = 1,
+    limit: number = 10,
+    gender?: string,
+    classId?: string,
+    sortBy: string = 'firstName',
+    sortOrder: 'asc' | 'desc' = 'asc',
+    search?: string
+  ): Promise<{ studentDetails: Student[], totalCount: number, totalPages: number }> {
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -915,13 +925,77 @@ export class UserService {
         session.startTransaction();
       }
 
-      const students = await this.studentModel.find().session(session).exec();
+      const matchStage: any = {
+        $match: {
+          isActive: true, // Ensure only active students are fetched
+          ...(gender && { gender }),
+          ...(classId && { classId: new Types.ObjectId(classId) }),
+        },
+      };
+
+      const sortStage: any = {
+        $sort: {
+          [sortBy]: sortOrder === 'asc' ? 1 : -1,
+        },
+      };
+
+      const pipeline = [
+        {
+          $lookup: {
+            from: 'users', // Ensure this matches your actual collection name
+            localField: 'userId',
+            foreignField: '_id',
+            as: 'userDetails',
+          },
+        },
+        {
+          $unwind: '$userDetails',
+        },
+        {
+          $match: {
+            'userDetails.schoolId': "das",
+            'userDetails.isActive': true,
+          },
+        },
+        matchStage,
+        ...(search
+          ? [
+              {
+                $match: {
+                  $or: [
+                    { 'userDetails.username': { $regex: search, $options: 'i' } },
+                    { firstName: { $regex: search, $options: 'i' } },
+                    { lastName: { $regex: search, $options: 'i' } },
+                    { enrollmentNumber: { $regex: search, $options: 'i' } },
+                  ],
+                },
+              },
+            ]
+          : []),
+        sortStage,
+        {
+          $skip: (page - 1) * Number(limit),
+        },
+        {
+          $limit: Number(limit),
+        },
+      ];
+
+      const students = await this.studentModel.aggregate(pipeline).session(session).exec();
 
       if (session) {
         await session.commitTransaction();
       }
-      return students;
+      const totalRecords = students.length;
+      const recordsPerPage = 50;
+      const totalPages = Math.ceil(totalRecords / recordsPerPage);
+      return {
+        studentDetails: students,
+        totalCount: totalRecords,
+        totalPages: totalPages    
+      };
     } catch (error) {
+      console.error('Error fetching students:', error);
       if (session) {
         await session.abortTransaction();
       }
@@ -938,7 +1012,7 @@ export class UserService {
 
   async findOneStudent(id: string): Promise<Student> {
     let session = null;
-    try {
+    try { 
       const supportsTransactions = await this.supportsTransactions();
 
       if (supportsTransactions) {

@@ -115,6 +115,9 @@ export class Staff {
 
   @Prop({type:String,required:false})
   bloodGroup: string;
+
+  @Prop({type:String,required:false})
+  profilePhoto: string;
 }
 
 export const StaffSchema = SchemaFactory.createForClass(Staff);
