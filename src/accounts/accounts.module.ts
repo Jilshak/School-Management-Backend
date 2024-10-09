@@ -10,6 +10,8 @@ import { FeeStructure, FeeStructureSchema } from 'src/domains/schema/fee-structu
 import { User, UserSchema } from 'src/domains/schema/user.schema';
 import { Student, StudentSchema } from 'src/domains/schema/students.schema';
 import { School, SchoolSchema } from 'src/domains/schema/school.schema';
+import { Expense, ExpenseSchema } from 'src/domains/schema/expense.schema';
+import { ExpenseCategory, ExpenseCategorySchema } from '../domains/schema/expense-category.schema';
 
 @Module({
   imports: [
@@ -21,6 +23,8 @@ import { School, SchoolSchema } from 'src/domains/schema/school.schema';
       { name: User.name, schema: UserSchema },
       { name: Student.name, schema: StudentSchema },
       { name: School.name, schema: SchoolSchema },
+      { name: Expense.name, schema: ExpenseSchema },
+      { name: ExpenseCategory.name, schema: ExpenseCategorySchema },
     ]),
     GuardsModule,
   ],
