@@ -90,6 +90,86 @@ export class UserController {
     }
   }
 
+  // fetch students
+  @Get("/students")
+  @Roles(UserRole.ADMIN,UserRole.HR,UserRole.TEACHER)
+  @ApiOperation({ summary: 'Get all students' })
+  @ApiResponse({ status: 200, description: 'Return all students.', type: [User] })
+  @ApiQuery({ 
+    name: 'page', 
+    required: false, 
+    type: Number, 
+    description: 'Page number for pagination.',
+    example: 1
+  })
+  @ApiQuery({ 
+    name: 'limit', 
+    required: false, 
+    type: Number, 
+    description: 'Number of items per page.',
+    example: 10
+  })
+  @ApiQuery({ 
+    name: 'gender', 
+    required: false, 
+    type: String, 
+    description: 'Filter by gender (male/female).',
+    example: 'male'
+  })
+  @ApiQuery({ 
+    name: 'classId', 
+    required: false, 
+    type: String, 
+    description: 'Filter by class ID.',
+    example: '60a5e6f9b9e7c123456789ab'
+  })
+  @ApiQuery({ 
+    name: 'sortBy', 
+    required: false, 
+    type: String, 
+    description: 'Sort by field (firstName/enrollmentNumber).',
+    example: 'firstName'
+  })
+  @ApiQuery({ 
+    name: 'sortOrder', 
+    required: false, 
+    type: String, 
+    description: 'Sort order (asc/desc).',
+    example: 'asc'
+  })
+  @ApiQuery({ 
+    name: 'search', 
+    required: false, 
+    type: String, 
+    description: 'Search term for filtering students by name or username.',
+    example: 'john'
+  })
+  async findAllStudents(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('gender') gender?: string,
+    @Query('classId') classId?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+    @Query('search') search?: string,
+    @LoginUser('schoolId') schoolId?: Types.ObjectId
+  ) {
+    try {
+      return await this.userService.findAllStudents(
+        schoolId, 
+        page, 
+        limit, 
+        gender, 
+        classId, 
+        sortBy, 
+        sortOrder,
+        search
+      );
+    } catch (error) {
+      throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
   @Get("/count-by-role")
   @Roles(UserRole.ADMIN,UserRole.HR)
   @ApiOperation({ summary: 'Get all users' })
