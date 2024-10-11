@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsDate, IsEnum, IsOptional, IsArray, IsMongoId } from 'class-validator';
+import { IsNotEmpty, IsString, IsDate, IsEnum, IsOptional, IsArray, IsMongoId, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Types } from 'mongoose';
 
@@ -20,6 +20,11 @@ export class ExamDto{
   @IsDate()
   @Type(() => Date)
   date: Date;
+
+  @ApiProperty({ description: 'Total mark of the exam' })
+  @IsNotEmpty()
+  @IsNumber()
+  totalMark:number;
 
 
   @ApiProperty({ description: 'Exam Starting time' })
@@ -67,6 +72,11 @@ export class CreateClassTest {
   @IsMongoId()
   @Type(()=>Types.ObjectId)
   subjectId: Types.ObjectId
+
+  @ApiProperty({ description: 'Total mark of the exam' })
+  @IsNotEmpty()
+  @IsNumber()
+  totalMark:number;
 
   
   @ApiProperty({ description: 'ClassId' })
