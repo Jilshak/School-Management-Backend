@@ -12,8 +12,11 @@ export class FileUploadUtil {
       // Extract the file type and extension from the base64 string
       const { fileType, extension } = FileUploadUtil.getFileTypeFromBase64(base64String);
 
+      // Remove the extension prefix
+      const base64WithoutPrefix = base64String.replace(/^\w+:/, "");
+
       // Remove the data:image/png;base64 part if it exists
-      const base64Data = base64String.replace(/^data:.*?;base64,/, "");
+      const base64Data = base64WithoutPrefix.replace(/^data:.*?;base64,/, "");
 
       // Decode the base64 string
       const fileBuffer = Buffer.from(base64Data, 'base64');

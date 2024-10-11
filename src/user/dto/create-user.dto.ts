@@ -314,6 +314,11 @@ export class CreateUserDto {
   @Type(() => ParentsDetailsDto)
   @IsOptional()
   parentsDetails?: ParentsDetailsDto;
+
+  @ApiProperty({ required: false, example: 'profile.jpg' })
+  @IsString()
+  @IsOptional()
+  profilePhoto?: string;
 }
 
 

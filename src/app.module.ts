@@ -17,6 +17,7 @@ import { OthersModule } from './others/others.module';
 import { SchoolTypeModule } from './school-type/school-type.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { GuardsModule } from './guards/guards.module';
+import { AssetService } from './assets.service';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PaymentDueCron } from './domains/crons/payment-due.service';
 import { NotificationService } from './notification/notification.service';

@@ -94,6 +94,9 @@ export class Student extends Document {
 
   @Prop({type:String,required:false})
   bloodGroup: string;
+
+  @Prop({type:String,required:false})
+  profilePhoto: string;
 }
 
 export const StudentSchema = SchemaFactory.createForClass(Student);
