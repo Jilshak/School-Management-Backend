@@ -1,28 +1,22 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
-@Schema()
+@Schema({timestamps:true})
 export class Payroll extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'Employee', required: true })
-  employeeId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  userId: Types.ObjectId;
 
-  @Prop({ required: true })
-  payPeriodStart: Date;
+  @Prop({ required: true, default: new Date() })
+  date: Date;
 
-  @Prop({ required: true })
-  payPeriodEnd: Date;
+  @Prop({ required: true,type:Number })
+  paid: number;
 
-  @Prop({ required: true })
-  basicSalary: number;
+  @Prop({ type: Types.ObjectId, ref: 'School', required: true })
+  schoolId: Types.ObjectId;
 
-  @Prop({ required: true })
-  allowances: number;
-
-  @Prop({ required: true })
-  deductions: number;
-
-  @Prop({ required: true })
-  netSalary: number;
+  @Prop({ type: Number,required: true })
+  baseSalary: number;
 
   @Prop()
   remarks: string;

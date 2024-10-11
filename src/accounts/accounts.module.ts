@@ -12,6 +12,9 @@ import { Student, StudentSchema } from 'src/domains/schema/students.schema';
 import { School, SchoolSchema } from 'src/domains/schema/school.schema';
 import { Expense, ExpenseSchema } from 'src/domains/schema/expense.schema';
 import { ExpenseCategory, ExpenseCategorySchema } from '../domains/schema/expense-category.schema';
+import { Salary, SalarySchema } from '../domains/schema/salary.schema';
+import { Staff, StaffSchema } from 'src/domains/schema/staff.schema';
+import { Payroll, PayrollSchema } from 'src/domains/schema/payroll.schema';
 
 @Module({
   imports: [
@@ -25,6 +28,9 @@ import { ExpenseCategory, ExpenseCategorySchema } from '../domains/schema/expens
       { name: School.name, schema: SchoolSchema },
       { name: Expense.name, schema: ExpenseSchema },
       { name: ExpenseCategory.name, schema: ExpenseCategorySchema },
+      { name: Salary.name, schema: SalarySchema },
+      { name: Staff.name, schema: StaffSchema },
+      { name: Payroll.name, schema: PayrollSchema }
     ]),
     GuardsModule,
   ],

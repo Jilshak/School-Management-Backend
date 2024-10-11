@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, ValidationPipe, Res, InternalServerErrorException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, ValidationPipe, Res, InternalServerErrorException, Patch } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../shared/guards/roles.guard';
@@ -21,6 +21,7 @@ import { CreateExpenseDto } from './dto/create-expense.dto';
 import { UpdateExpenseDto } from './dto/update-expense.dto';
 import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
 import { UpdateExpenseCategoryDto } from './dto/update-expense-category.dto';
+import { CreatePayrollDto } from './dto/create-payroll.dto';
 
 @ApiTags('accounts')
 @ApiBearerAuth()
@@ -363,6 +364,18 @@ export class AccountsController {
     return this.accountsService.findAllDayBook(schoolId, startDate, endDate);
   }
 
+  @Get('user-salary')
+  @Roles('admin', 'accountant','hr')
+  @ApiOperation({ summary: 'Get all Users with and their salary' })
+  @ApiResponse({ status: 200, description: 'Returns all Users with and their salary' })
+  @ApiQuery({ name: 'startDate', required: false, type: Date })
+  @ApiQuery({ name: 'endDate', required: false, type: Date })
+  getUserSalary(
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+  ) {
+    return this.accountsService.getUserSalary(schoolId);
+  }
+
   @Get(":id")
   @Roles('admin', 'accountant')
   @ApiOperation({ summary:'Get all accounts'})
@@ -380,6 +393,40 @@ export class AccountsController {
   updateAccounts(@Param("id") id:string,@Body(ValidationPipe) updateAccountDto:UpdateAccountDto,@LoginUser("schoolId") schoolId:Types.ObjectId,@LoginUser("userId") userId:Types.ObjectId) {
     return this.accountsService.updateAccount(id,updateAccountDto,schoolId,userId);
   } 
+
+  @Patch("salary-management/:userId")
+  @Roles("admin","accountant","hr")
+  @ApiOperation({summary:"Create Salary Management"})
+  @ApiResponse({status:201,description:"The salary management has been successfully created."})
+  @ApiResponse({status:400,description:"Bad Request."})
+  @ApiBody({schema:{
+    properties:{
+      baseSalary: { type: 'number' },
+    }
+  }})
+  async createSalaryManagement(@Param("userId") staffId:string,@Body("baseSalary") baseSalary:number,@LoginUser("schoolId") schoolId:Types.ObjectId,@LoginUser("userId") userId:Types.ObjectId){
+    return await this.accountsService.salaryManagement(staffId,baseSalary,schoolId,userId)
+  }
+
+  @Post("payrolls")
+  @Roles("admin","accountant","hr")
+  @ApiOperation({summary:"Create Payroll"})
+  @ApiResponse({status:201,description:"The payroll has been successfully created."})
+  @ApiResponse({status:400,description:"Bad Request."})
+  @ApiBody({type:CreatePayrollDto})
+  async createPayroll(@Body(ValidationPipe) createPayrollDto:CreatePayrollDto,@LoginUser("schoolId") schoolId:Types.ObjectId,@LoginUser("userId") userId:Types.ObjectId){
+    return await this.accountsService.createPayroll(createPayrollDto,schoolId,userId)
+  }
+
+  @Get("payrolls/:userId")
+  @Roles("admin","accountant","hr")
+  @ApiOperation({summary:"Create Payroll"})
+  @ApiResponse({status:201,description:"The payroll has been successfully created."})
+  @ApiResponse({status:400,description:"Bad Request."})
+  @ApiBody({type:CreatePayrollDto})
+  async getUserPayroll(@Param("userId") userId:string,@LoginUser("schoolId") schoolId:Types.ObjectId){
+    return await this.accountsService.getPayroll(new Types.ObjectId(userId),schoolId)
+  }
 
   @Post('expenses')
   @Roles('admin', 'accountant')

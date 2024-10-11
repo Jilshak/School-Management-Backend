@@ -31,6 +31,11 @@ import { EventService } from './event/event.service';
 import { EventController } from './event/event.controller';
 import { EventModule } from './event/event.module';
 import { WhatsAppService } from './notification/whatsapp.service';
+import { SalaryDueCron } from './domains/crons/salary.service';
+import { Staff, StaffSchema } from './domains/schema/staff.schema';
+import { Expense, ExpenseSchema } from './domains/schema/expense.schema';
+import { Salary, SalarySchema } from './domains/schema/salary.schema';
+import { Payroll, PayrollSchema } from './domains/schema/payroll.schema';
 
 @Module({
   imports: [
@@ -56,6 +61,10 @@ import { WhatsAppService } from './notification/whatsapp.service';
       { name: User.name, schema: UserSchema },
       { name: Student.name, schema: StudentSchema },
       { name: School.name, schema: SchoolSchema },
+      { name: Staff.name, schema: StaffSchema },
+      { name:Expense.name, schema: ExpenseSchema },
+      { name:Salary.name, schema: SalarySchema },
+      { name:Payroll.name, schema: PayrollSchema }
 
     ]),
     GuardsModule,
@@ -74,7 +83,7 @@ import { WhatsAppService } from './notification/whatsapp.service';
     AttendanceModule,
     EventModule,
   ],
-  providers:[PaymentDueCron, NotificationService, WhatsAppService],
+  providers:[PaymentDueCron, NotificationService, WhatsAppService,SalaryDueCron],
   controllers: []
 })
 export class AppModule {}

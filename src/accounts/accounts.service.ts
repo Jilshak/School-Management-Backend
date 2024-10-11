@@ -27,6 +27,10 @@ import { UpdateExpenseDto } from './dto/update-expense.dto';
 import { ExpenseCategory } from '../domains/schema/expense-category.schema';
 import { CreateExpenseCategoryDto } from './dto/create-expense-category.dto';
 import { UpdateExpenseCategoryDto } from './dto/update-expense-category.dto';
+import { Salary } from 'src/domains/schema/salary.schema';
+import { Staff } from 'src/domains/schema/staff.schema';
+import { Payroll } from 'src/domains/schema/payroll.schema';
+import { CreatePayrollDto } from './dto/create-payroll.dto';
 
 @Injectable()
 export class AccountsService {
@@ -36,6 +40,7 @@ export class AccountsService {
     @InjectModel(PaymentDue.name) private paymentDueModel: Model<PaymentDue>,
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Student.name) private studentModel: Model<Student>,
+    @InjectModel(Staff.name) private staffModel: Model<Staff>,
     @InjectModel(School.name) private schoolModel: Model<School>,
     @InjectModel(FeeStructure.name)
     private feeStructureModel: Model<FeeStructure>,
@@ -43,6 +48,8 @@ export class AccountsService {
     @InjectModel(Expense.name) private expenseModel: Model<Expense>,
     @InjectModel(ExpenseCategory.name)
     private expenseCategoryModel: Model<ExpenseCategory>,
+    @InjectModel(Salary.name) private salaryModel: Model<Salary>,
+    @InjectModel(Payroll.name) private payrollModel: Model<Payroll>,
   ) {}
 
   private async supportsTransactions(): Promise<boolean> {
@@ -1749,6 +1756,91 @@ export class AccountsService {
     }
   }
 
+  async salaryManagement(
+    staffId: string,
+    baseSalary: number,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ) {
+    try {
+      const salary = this.salaryModel.updateOne(
+        { userId: new Types.ObjectId(staffId), schoolId },
+        { $set: { baseSalary } },
+        { upsert: true },
+      );
+      return salary;
+    } catch (error) {
+      console.log(error);
+      throw new InternalServerErrorException(
+        'Failed to create salary management',
+      );
+    }
+  }
+
+  async getPayroll(userId: Types.ObjectId, schoolId: Types.ObjectId) {
+    try {
+      const payroll = await this.payrollModel.find({ userId, schoolId });
+      const { baseSalary } = await this.salaryModel.findOne({
+        userId,
+        schoolId,
+      });
+      const history = payroll.map((payroll) => {
+        return {
+          date: payroll.date,
+          paid: payroll.paid,
+          balance: baseSalary - payroll.paid,
+          remarks: payroll.remarks,
+        };
+      });
+      return history;
+    } catch (err) {
+      console.log(err);
+      throw new InternalServerErrorException('Failed to create payroll');
+    }
+  }
+
+  async createPayroll(
+    createPayrollDto: CreatePayrollDto,
+    schoolId: Types.ObjectId,
+    userId: Types.ObjectId,
+  ) {
+    try {
+      const { baseSalary } = await this.salaryModel.findOne({
+        userId: new Types.ObjectId(createPayrollDto.userId),
+        schoolId,
+      });
+      const payroll = new this.payrollModel({
+        ...createPayrollDto,
+        baseSalary,
+        userId: new Types.ObjectId(createPayrollDto.userId),
+        schoolId,
+      });
+      const user = await this.staffModel.findOne({userId:new Types.ObjectId(createPayrollDto.userId)})
+      let category = await this.expenseCategoryModel.findOne({name:"Salary", schoolId});
+      if (!category) {
+        category = await this.expenseCategoryModel.create({
+          name: "Salary",
+          schoolId
+        });
+      }
+
+      const expense = new this.expenseModel({
+        amount:createPayrollDto.paid,
+        category:category._id,
+        description:`Paid to ${user.firstName} ${user.lastName}, Phone: ${user.contactNumber}`,
+        schoolId,
+        date:new Date(),
+        createdBy:userId,
+        updatedBy:userId
+      })
+      await expense.save()
+      return await payroll.save();
+    } catch (err) {
+      console.log(err);
+      throw new InternalServerErrorException('Failed to create payroll');
+    }
+  }
+
   async createExpense(
     createExpenseDto: CreateExpenseDto,
     schoolId: Types.ObjectId,
@@ -1909,7 +2001,6 @@ export class AccountsService {
           if (fee.duePaymentId) {
             fee.feeTypeId = feeTypeTemp
               .map((feeType) => {
-               
                 return feeType.feeDetails.find(
                   (a) => a._id.toString() === fee.duePaymentId.toString(),
                 )?.feeType;
@@ -1943,29 +2034,133 @@ export class AccountsService {
       const expenseGrouped = new Map();
 
       expense.forEach((expense) => {
-      
         if (expenseGrouped.has(expense.category)) {
           const temp = expenseGrouped.get(expense.category);
           temp.amount += expense.amount;
           expenseGrouped.set(expense.category, temp);
         } else {
-          expenseGrouped.set(expense.category, { amount: expense.amount, description: 'expense' });
+          expenseGrouped.set(expense.category, {
+            amount: expense.amount,
+            description: 'expense',
+          });
         }
       });
 
-      const data = [...Array.from(expenseGrouped.entries()).map(([category, { amount, description }]) => ({
-        category,
-        amount,
-        description,
-      })),...Array.from(income.entries()).map(([category, { amount, description }]) => ({
-        category,
-        amount,
-        description,
-      }))];
+      const data = [
+        ...Array.from(expenseGrouped.entries()).map(
+          ([category, { amount, description }]) => ({
+            category,
+            amount,
+            description,
+          }),
+        ),
+        ...Array.from(income.entries()).map(
+          ([category, { amount, description }]) => ({
+            category,
+            amount,
+            description,
+          }),
+        ),
+      ];
       return data;
     } catch (error) {
       console.log(error);
       throw new InternalServerErrorException('Failed to find expenses');
+    }
+  }
+
+  async getUserSalary(schoolId: Types.ObjectId) {
+    try {
+      let users = await this.userModel
+        .aggregate([
+          { $match: { schoolId, isActive: true } },
+          {
+            $lookup: {
+              from: 'staffs',
+              localField: '_id',
+              foreignField: 'userId',
+              as: 'staff',
+            },
+          },
+          { $unwind: '$staff' },
+          {
+            $lookup: {
+              from: 'salaries',
+              localField: '_id',
+              foreignField: 'userId',
+              as: 'salary',
+            },
+          },
+          {
+            $addFields: {
+              hasSalary: { $gt: [{ $size: '$salary' }, 0] },
+            },
+          },
+          {
+            $project: {
+              salary: {
+                $cond: {
+                  if: '$hasSalary',
+                  then: { $arrayElemAt: ['$salary', 0] },
+                  else: {},
+                },
+              },
+              staff: 1,
+              roles: 1,
+            },
+          },
+        ])
+        .exec();
+
+      const userIds = users.map((user) => user._id);
+      const payroll = await this.payrollModel.find({
+        userId: { $in: userIds },
+        schoolId,
+      });
+
+      const paymentMonthly = new Map();
+      payroll.forEach((payment) => {
+        const month = payment.date.getMonth();
+        const year = payment.date.getFullYear();
+        const key = `${year}-${month}`;
+        const userId = payment.userId.toString();
+
+        if (!paymentMonthly.has(userId)) {
+          paymentMonthly.set(userId, new Map());
+        }
+
+        const userPayments = paymentMonthly.get(userId);
+        if (userPayments.has(key)) {
+          userPayments.get(key).paid += payment.paid;
+          userPayments.get(key).count += 1;
+          userPayments.get(key).baseSalary += payment.baseSalary;
+          userPayments.get(key).baseSalary = userPayments.get(key).baseSalary / userPayments.get(key).count;
+        } else {
+          userPayments.set(key, { paid: payment.paid,baseSalary:payment.baseSalary,count:1 });
+        }
+      });
+
+      users = users.map((user) => {
+        const userPayments = paymentMonthly.get(user._id.toString()) || new Map();
+        const paymentHistory = Array.from(userPayments.entries()).map(([key, value]) => {
+          const [year, month] = key.split('-').map(Number);
+          return {
+            date: new Date(year, month, 1),
+            paid: value.paid,
+            balance: value.baseSalary ? Math.max(value.baseSalary - value.paid, 0) : 0,
+          };
+        });
+
+        return {
+          ...user,
+          paymentHistory: paymentHistory.sort((a, b) => b.date.getTime() - a.date.getTime()),
+        };
+      });
+
+      return users;
+    } catch (error) {
+      console.log(error);
+      throw new InternalServerErrorException('Failed to get user salary');
     }
   }
 
