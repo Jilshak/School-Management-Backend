@@ -12,6 +12,9 @@ export class ClassTest extends Document {
   @Prop({ required: true, type: Types.ObjectId, ref: 'Classroom',immutable:true })
   classId: Types.ObjectId;
 
+  @Prop({required:true,type:Number})
+  totalMark:number;
+
   @Prop({ required: true, type: Types.ObjectId})
   periods: Types.ObjectId[];
 

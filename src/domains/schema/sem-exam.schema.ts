@@ -6,6 +6,9 @@ class ExamDetail {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Subject', required: true })
   subjectId: MongooseSchema.Types.ObjectId;
 
+  @Prop({required:true,type:Number})
+  totalMark:number;
+
   @Prop({ required: true })
   date: Date;
 

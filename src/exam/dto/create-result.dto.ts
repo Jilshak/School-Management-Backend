@@ -21,6 +21,5 @@ export class CreateResultDto {
   @IsNotEmpty()
   @IsNumber()
   @Min(0)
-  @Max(100)
   score: number;
 }

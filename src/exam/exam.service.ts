@@ -17,6 +17,9 @@ import { CreateExamTimeTableDto } from './dto/create-exam-time-table.dto';
 import { CreateResultDto } from './dto/create-result.dto';
 import { ClassTest } from 'src/domains/schema/class-test.schema';
 import { TimeTable } from 'src/domains/schema/timetable.schema';
+import { Student } from 'src/domains/schema/students.schema';
+import { User } from 'src/domains/schema/user.schema';
+import { Classroom } from 'src/domains/schema/classroom.schema';
 
 @Injectable()
 export class ExamService {
@@ -27,6 +30,9 @@ export class ExamService {
     @InjectModel(ExamTimeTable.name)
     private examTimeTableModel: Model<ExamTimeTable>,
     @InjectModel(Result.name) private resultModel: Model<Result>,
+    @InjectModel(Student.name) private studentModel: Model<Student>,
+    @InjectModel(User.name) private userModel: Model<User>,
+    @InjectModel(Classroom.name) private classroomModel: Model<Classroom>,
     @InjectConnection() private connection: Connection,
   ) {}
 
@@ -57,6 +63,7 @@ export class ExamService {
         exams: createExamDto.exam.map((exam) => ({
           subjectId: exam.subjectId,
           date: exam.date,
+          totalMark:exam.totalMark,
           startTime: exam.startTime,
           endTime: exam.endTime,
           description: exam.description,
@@ -100,6 +107,7 @@ export class ExamService {
         date: createExamDto.date,
         schoolId,
         subjectId: new Types.ObjectId(createExamDto.subjectId),
+        totalMark:createExamDto.totalMark,
         periods: createExamDto.periods.map((val) => new Types.ObjectId(val)),
       });
 
@@ -235,6 +243,7 @@ export class ExamService {
             'classId.name': 1,
             timetableEntries: 1,
             description: 1,
+            totalMark:1,
           },
         },
       ]);
@@ -296,6 +305,7 @@ export class ExamService {
                   startTime: '$$exam.startTime',
                   endTime: '$$exam.endTime',
                   description: '$$exam.description',
+                  totalMark: '$$exam.totalMark',
                 },
               },
             },
@@ -424,6 +434,7 @@ export class ExamService {
             'classId.name': 1,
             timetableEntries: 1,
             description: 1,
+            totalMark:1
           },
         },
       ]);
@@ -472,6 +483,7 @@ export class ExamService {
                   startTime: '$$exam.startTime',
                   endTime: '$$exam.endTime',
                   description: '$$exam.description',
+                  totalMark: '$$exam.totalMark'
                 },
               },
             },
@@ -589,6 +601,7 @@ export class ExamService {
                     startTime: '$$exam.startTime',
                     endTime: '$$exam.endTime',
                     description: '$$exam.description',
+                    totalMark: '$$exam.totalMark',
                   },
                 },
               },
@@ -720,6 +733,7 @@ export class ExamService {
               schoolId: 1,
               createdAt: 1,
               updatedAt: 1,
+              totalMark:1,
               subject: { $arrayElemAt: ['$subject', 0] },
               classroom: { $arrayElemAt: ['$classroom', 0] },
               timetableEntries: 1,
@@ -894,6 +908,77 @@ export class ExamService {
     }
   }
 
+  async getExistingResultOfAllStudent(examId: Types.ObjectId, schoolId: Types.ObjectId) {
+    try {
+      const results = await this.resultModel.aggregate([
+        {
+          $match: {
+            examId:new Types.ObjectId(examId),
+            schoolId: new Types.ObjectId(schoolId),
+          }
+        },
+        {
+          $lookup: {
+            from: 'subjects',
+            localField: 'subjectId',
+            foreignField: '_id',
+            as: 'subjectDetails'
+          }
+        },
+        {
+          $unwind: '$subjectDetails'
+        },
+        {
+          $lookup: {
+            from: 'classTests',
+            localField: 'examId',
+            foreignField: '_id',
+            as: 'classTestDetails'
+          }
+        },
+        {
+          $lookup: {
+            from: 'semExams',
+            localField: 'examId',
+            foreignField: '_id',
+            as: 'semExamDetails'
+          }
+        },
+        {
+          $addFields: {
+            examDetails: {
+              $cond: {
+                if: { $gt: [{ $size: '$classTestDetails' }, 0] },
+                then: { $arrayElemAt: ['$classTestDetails', 0] },
+                else: { $arrayElemAt: ['$semExamDetails', 0] }
+              }
+            }
+          }
+        },
+        {
+          $project: {
+            classTestDetails: 0,
+            semExamDetails: 0
+          }
+        }
+      ]);
+      let classId = await this.semExamModel.findById(examId,{classId:1})
+      if(!classId){
+        classId = await this.classTestModel.findById(examId,{classId:1})
+      }
+      const classDetails = await this.userModel.find({classId:classId.classId,roles:"student"})
+      const studentId = classDetails.map((x)=>x._id)
+      const students = await this.studentModel.find({userId:{$in:studentId}})
+      const structuredResult = students.map((student)=>{
+        const result = results.filter((x)=>x.studentId.toString() === student.userId.toString())
+        return {name:student.firstName+" "+student.lastName,userId:student.userId,result}
+      })
+      return structuredResult;
+    } catch (error) {
+      this.handleError(error, 'Failed to get existing result of student');
+    }
+  }
+
   private handleError(error: any, message: string): never {
     console.error(error);
     if (error instanceof NotFoundException) {
@@ -903,5 +988,26 @@ export class ExamService {
       throw error;
     }
     throw new InternalServerErrorException(message);
+  }
+
+  async updateMarkOfResult(updateMarkDto: CreateResultDto[], schoolId: Types.ObjectId) {
+    const bulkOps = updateMarkDto.map((x) => ({
+      updateOne: {
+        filter: {
+          examId: new Types.ObjectId(x.examId),
+          subjectId: new Types.ObjectId(x.subjectId),
+          studentId: new Types.ObjectId(x.studentId),
+          schoolId: new Types.ObjectId(schoolId)
+        },
+        update: {
+          $set: {
+            score: x.score,
+          }
+        },
+        upsert: true
+      }
+    }));
+
+    return this.resultModel.bulkWrite(bulkOps);
   }
 }

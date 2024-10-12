@@ -208,4 +208,23 @@ export class ExamController {
       schoolId
     );
   }
+
+  @Get("result/all/:examId")
+  @Roles(UserRole.TEACHER,UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get existing exam result of all student' })
+  @ApiResponse({ status: 200, description: 'Returns the existing exam result of all student if found.' })
+  @ApiResponse({ status: 404, description: 'Result not found.' })
+  getExistingResultOfAllStudent(@Param("examId") examId:string,@LoginUser("schoolId") schoolId:Types.ObjectId){
+    return this.examService.getExistingResultOfAllStudent(new Types.ObjectId(examId),schoolId)
+  }
+
+  @Post("result/update-mark")
+  @Roles(UserRole.TEACHER,UserRole.ADMIN)
+  @ApiOperation({ summary: 'Update mark of result' })
+  @ApiResponse({ status: 200, description: 'Returns the updated mark of result.' })
+  @ApiResponse({ status: 404, description: 'Result not found.' })
+  updateMarkOfResult(@Body(ValidationPipe) updateMarkDto:CreateResultDto[],@LoginUser("schoolId") schoolId:Types.ObjectId){
+    return this.examService.updateMarkOfResult(updateMarkDto,schoolId)
+  }
+
 }
