@@ -870,7 +870,7 @@ export class ExamService {
         },
         {
           $lookup: {
-            from: 'classTests',
+            from: 'classtests',
             localField: 'examId',
             foreignField: '_id',
             as: 'classTestDetails'
@@ -878,7 +878,7 @@ export class ExamService {
         },
         {
           $lookup: {
-            from: 'semExams',
+            from: 'semexams',
             localField: 'examId',
             foreignField: '_id',
             as: 'semExamDetails'
