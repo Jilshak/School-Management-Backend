@@ -1,19 +1,14 @@
 import {
   Injectable,
-  NotFoundException,
-  InternalServerErrorException,
-  BadRequestException,
 } from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
 import { Model, Connection, Types, ClientSession } from 'mongoose';
 import { User } from '../domains/schema/user.schema';
 import { Student } from '../domains/schema/students.schema';
-import { Admission } from '../domains/schema/admission.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
-import { CreateAdmissionDto } from './dto/create-admission.dto';
 import { UserRole } from '../domains/enums/user-roles.enum';
 import * as bcrypt from 'bcrypt';
 import { Staff } from 'src/domains/schema/staff.schema';
@@ -93,21 +88,21 @@ export class UserService {
     return { username, password };
   }
 
-  private async uploadDocuments(savedUser: User, createUserDto: CreateUserDto): Promise<Record<string, string | null>> {
-    const documentTypes = [
-      'profilePhoto',
-      'adhaarDocument',
-      'birthCertificateDocument',
-      'pancardDocument',
-      'tcDocument'
-    ];
+  private async uploadDocuments(savedUser: User, userDto: CreateUserDto | UpdateUserDto): Promise<Record<string, string | null>> {
+    // const documentTypes = [
+    //   'profilePhoto',
+    //   'adhaarDocument',
+    //   'birthCertificateDocument',
+    //   'pancardDocument',
+    //   'tcDocument'
+    // ];
 
     const uploadedDocuments: Record<string, string | null> = {};
 
-    for (const docType of documentTypes) {
-      if (createUserDto[docType]) {
+    for (const docType of userDto.updatedFiles) {
+      if (userDto[docType]) {
         uploadedDocuments[docType] = await FileUploadUtil.uploadBase64File(
-          createUserDto[docType],
+          userDto[docType],
           `${savedUser.username}_${docType}`,
           savedUser.username
         );
@@ -190,7 +185,7 @@ export class UserService {
         await this.createStaffDocument(savedUser, createUserDto, session, uploadedDocuments);
       }
       if (savedUser.roles.includes(UserRole.TEACHER)) {
-        await this.createTeacherDocument(savedUser, createUserDto, session, uploadedDocuments);
+        await this.createTeacherDocument(savedUser, createUserDto, session);
       }
       if (savedUser.roles.includes(UserRole.STUDENT)) {
         await this.createStudentDocument(savedUser, createUserDto, session, uploadedDocuments);
@@ -271,6 +266,7 @@ export class UserService {
       pancardNumber: dto.pancardNumber,
       emergencyContactName: dto.emergencyContactName,
       emergencyContactNumber: dto.emergencyContactNumber,
+      profilePhoto: uploadedDocuments.profilePhoto,
       pancardDocument: uploadedDocuments.pancardDocument,
       adhaarDocument: uploadedDocuments.adhaarDocument
     };
@@ -282,7 +278,6 @@ export class UserService {
     user: User,
     dto: CreateUserDto,
     session: ClientSession | null,
-    uploadedDocuments: any
   ) {
     try {
       const teacherData = {
@@ -290,10 +285,7 @@ export class UserService {
         subjects: dto.subjects
           ? dto.subjects.map((x) => new Types.ObjectId(x))
           : [],
-        adhaarDocument: uploadedDocuments.adhaarDocument,
-        pancardDocument: uploadedDocuments.pancardDocument
       };
-      console.log(teacherData)
       const createdTeacher = new this.teacherModel(teacherData);
       await createdTeacher.save({ session });
     } catch (err) {
@@ -333,6 +325,7 @@ export class UserService {
         birthCertificateDocument: uploadedDocuments.birthCertificateDocument,
         tcNumber: dto.tcNumber,
         tcDocument: dto.tcDocument,
+        profilePhoto: uploadedDocuments.profilePhoto
       };
       const createdStudent = new this.studentModel(studentData);
       await createdStudent.save({ session });
@@ -693,15 +686,16 @@ export class UserService {
         );
       }
 
+      const uploadedDocuments = await this.uploadDocuments(updatedUser, updateUserDto);
       // Update role-specific documents
       if (!updatedUser.roles.includes(UserRole.STUDENT)) {
-        await this.updateStaffDocument(updatedUser, updateUserDto, session);
+        await this.updateStaffDocument(updatedUser, updateUserDto, session, uploadedDocuments);
       }
       if (updatedUser.roles.includes(UserRole.TEACHER)) {
         await this.updateTeacherDocument(updatedUser, updateUserDto, session);
       }
       if (updatedUser.roles.includes(UserRole.STUDENT)) {
-        await this.updateStudentDocument(updatedUser, updateUserDto, session);
+        await this.updateStudentDocument(updatedUser, updateUserDto, session, uploadedDocuments);
       }
 
       if (session) {
@@ -732,6 +726,7 @@ export class UserService {
     user: User,
     dto: UpdateUserDto,
     session: ClientSession | null,
+    uploadedDocuments: Record<string, string | null>
   ) {
     const staffData = {
       userId: user._id,
@@ -754,8 +749,9 @@ export class UserService {
       pancardNumber: dto.pancardNumber,
       emergencyContactName: dto.emergencyContactName,
       emergencyContactNumber: dto.emergencyContactNumber,
-      pancardDocument: dto.pancardDocument,
-      adhaarDocument: dto.adhaarDocument,
+      pancardDocument: uploadedDocuments.pancardDocument,
+      adhaarDocument: uploadedDocuments.adhaarDocument,
+      profilePhoto: uploadedDocuments.profilePhoto
     };
     await this.staffModel.findOneAndUpdate(
       { userId: user._id },
@@ -784,6 +780,7 @@ export class UserService {
     user: User,
     dto: UpdateUserDto,
     session: ClientSession | null,
+    uploadedDocuments: Record<string, string | null>
   ) {
     const studentData = {
       userId: user._id,
@@ -804,9 +801,10 @@ export class UserService {
       adhaarNumber: dto.adhaarNumber,
       emergencyContactName: dto.emergencyContactName,
       emergencyContactNumber: dto.emergencyContactNumber,
-      adhaarDocument: dto.adhaarDocument,
+      adhaarDocument: uploadedDocuments.adhaarDocument,
       state: dto.state,
-      birthCertificateDocument: dto.birthCertificateDocument,
+      birthCertificateDocument: uploadedDocuments.birthCertificateDocument,
+      profilePhoto: uploadedDocuments.profilePhoto,
       tcNumber: dto.tcNumber,
       tcDocument: dto.tcDocument,
     };
@@ -953,7 +951,7 @@ export class UserService {
         },
         {
           $match: {
-            'userDetails.schoolId': "das",
+            'userDetails.schoolId': schoolId,
             'userDetails.isActive': true,
           },
         },

@@ -319,6 +319,13 @@ export class CreateUserDto {
   @IsString()
   @IsOptional()
   profilePhoto?: string;
+
+  // updated files
+  @ApiProperty({ required: false, example: 'Array of file names' })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  updatedFiles?: string[];
 }
 
 
