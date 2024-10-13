@@ -6,7 +6,7 @@ import { Model, Connection, Types, ClientSession } from 'mongoose';
 import { User } from '../domains/schema/user.schema';
 import { Student } from '../domains/schema/students.schema';
 import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateClassroomOfStudentsDto, UpdateUserDto } from './dto/update-user.dto';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UserRole } from '../domains/enums/user-roles.enum';
@@ -158,7 +158,6 @@ export class UserService {
           );
         }
       }
-      console.log(createUserDto);
       const { username, password } = await this.createUniqueUserCredentials();
       console.log({ username, password });
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -518,7 +517,6 @@ export class UserService {
   }
 
   async findOne(id: string, schoolId: Types.ObjectId): Promise<User> {
-    console.log(id)
     let session = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -702,6 +700,41 @@ export class UserService {
         await session.commitTransaction();
       }
       return updatedUser;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof CustomError) {
+        throw error;
+      }
+      console.error('Failed to update user:', error);
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to update user',
+      );
+    } finally {
+      if (session) {
+        session.endSession();
+      }
+    }
+  }
+  async updateClassroomOfStudents(
+    updateUserDto: UpdateClassroomOfStudentsDto,
+    schoolId: Types.ObjectId,
+  ) {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+      const studentId = updateUserDto.studentIds.map((id) => new Types.ObjectId(id));
+      await this.userModel.updateMany({ _id: { $in: studentId },schoolId: schoolId }, { $set: { classId: new Types.ObjectId(updateUserDto.classId) } }, { session });
+
+      if (session) {
+        await session.commitTransaction();
+      }
     } catch (error) {
       if (session) {
         await session.abortTransaction();

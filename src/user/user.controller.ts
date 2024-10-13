@@ -1,11 +1,34 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, Patch, ValidationPipe, UseInterceptors, UploadedFile, UploadedFiles } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Put,
+  UseGuards,
+  Query,
+  Patch,
+  ValidationPipe,
+  UseInterceptors,
+  UploadedFile,
+  UploadedFiles,
+} from '@nestjs/common';
 import { UserService } from './user.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../shared/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { UpdateClassroomOfStudentsDto, UpdateUserDto } from './dto/update-user.dto';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiParam,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { User } from '../domains/schema/user.schema';
 import { LoginUser } from 'src/shared/decorators/loginUser.decorator';
 import { Types } from 'mongoose';
@@ -20,12 +43,19 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  @Roles('admin','superadmin',UserRole.HR)
+  @Roles('admin', 'superadmin', UserRole.HR)
   @ApiOperation({ summary: 'Create a new user' })
-  @ApiResponse({ status: 201, description: 'The user has been successfully created.', type: String })
+  @ApiResponse({
+    status: 201,
+    description: 'The user has been successfully created.',
+    type: String,
+  })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
   @ApiBody({ type: CreateUserDto })
-  async create(@Body(ValidationPipe) createUserDto: CreateUserDto, @LoginUser("schoolId") schoolId:any) {
+  async create(
+    @Body(ValidationPipe) createUserDto: CreateUserDto,
+    @LoginUser('schoolId') schoolId: any,
+  ) {
     try {
       const res = await this.userService.create(createUserDto, schoolId);
       return { status: 201, description: res };
@@ -35,45 +65,45 @@ export class UserController {
   }
 
   @Get()
-  @Roles(UserRole.ADMIN,UserRole.HR)
+  @Roles(UserRole.ADMIN, UserRole.HR)
   @ApiOperation({ summary: 'Get all users' })
   @ApiResponse({ status: 200, description: 'Return all users.', type: [User] })
-  @ApiQuery({ 
-    name: 'role', 
-    required: false, 
-    enum: UserRole, 
-    isArray: true, 
+  @ApiQuery({
+    name: 'role',
+    required: false,
+    enum: UserRole,
+    isArray: true,
     description: 'Filter users by role.',
     type: [String],
-    example: [UserRole.ADMIN, UserRole.TEACHER]
+    example: [UserRole.ADMIN, UserRole.TEACHER],
   })
-  @ApiQuery({ 
-    name: 'page', 
-    required: false, 
-    type: Number, 
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
     description: 'Page number for pagination.',
-    example: 1
+    example: 1,
   })
-  @ApiQuery({ 
-    name: 'limit', 
-    required: false, 
-    type: Number, 
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
     description: 'Number of items per page.',
-    example: 10
+    example: 10,
   })
-  @ApiQuery({ 
-    name: 'search', 
-    required: false, 
-    type: String, 
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
     description: 'Search term for filtering users.',
-    example: 'john'
+    example: 'john',
   })
-  @ApiQuery({ 
-    name: 'full', 
-    required: false, 
-    type: Boolean, 
+  @ApiQuery({
+    name: 'full',
+    required: false,
+    type: Boolean,
     description: 'Whether to return full user details.',
-    example: false
+    example: false,
   })
   async findAll(
     @Query('role') role: UserRole[],
@@ -81,68 +111,79 @@ export class UserController {
     @Query('limit') limit: number = 10,
     @Query('search') search: string,
     @Query('full') full: boolean = false,
-    @LoginUser('schoolId') schoolId: Types.ObjectId
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
   ) {
     try {
-      return await this.userService.findAll(role, schoolId, full, page, limit, search);
+      return await this.userService.findAll(
+        role,
+        schoolId,
+        full,
+        page,
+        limit,
+        search,
+      );
     } catch (error) {
       throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
   // fetch students
-  @Get("/students")
-  @Roles(UserRole.ADMIN,UserRole.HR,UserRole.TEACHER)
+  @Get('/students')
+  @Roles(UserRole.ADMIN, UserRole.HR, UserRole.TEACHER)
   @ApiOperation({ summary: 'Get all students' })
-  @ApiResponse({ status: 200, description: 'Return all students.', type: [User] })
-  @ApiQuery({ 
-    name: 'page', 
-    required: false, 
-    type: Number, 
+  @ApiResponse({
+    status: 200,
+    description: 'Return all students.',
+    type: [User],
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
     description: 'Page number for pagination.',
-    example: 1
+    example: 1,
   })
-  @ApiQuery({ 
-    name: 'limit', 
-    required: false, 
-    type: Number, 
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
     description: 'Number of items per page.',
-    example: 10
+    example: 10,
   })
-  @ApiQuery({ 
-    name: 'gender', 
-    required: false, 
-    type: String, 
+  @ApiQuery({
+    name: 'gender',
+    required: false,
+    type: String,
     description: 'Filter by gender (male/female).',
-    example: 'male'
+    example: 'male',
   })
-  @ApiQuery({ 
-    name: 'classId', 
-    required: false, 
-    type: String, 
+  @ApiQuery({
+    name: 'classId',
+    required: false,
+    type: String,
     description: 'Filter by class ID.',
-    example: '60a5e6f9b9e7c123456789ab'
+    example: '60a5e6f9b9e7c123456789ab',
   })
-  @ApiQuery({ 
-    name: 'sortBy', 
-    required: false, 
-    type: String, 
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    type: String,
     description: 'Sort by field (firstName/enrollmentNumber).',
-    example: 'firstName'
+    example: 'firstName',
   })
-  @ApiQuery({ 
-    name: 'sortOrder', 
-    required: false, 
-    type: String, 
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    type: String,
     description: 'Sort order (asc/desc).',
-    example: 'asc'
+    example: 'asc',
   })
-  @ApiQuery({ 
-    name: 'search', 
-    required: false, 
-    type: String, 
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
     description: 'Search term for filtering students by name or username.',
-    example: 'john'
+    example: 'john',
   })
   async findAllStudents(
     @Query('page') page: number = 1,
@@ -152,40 +193,40 @@ export class UserController {
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: 'asc' | 'desc',
     @Query('search') search?: string,
-    @LoginUser('schoolId') schoolId?: Types.ObjectId
+    @LoginUser('schoolId') schoolId?: Types.ObjectId,
   ) {
     try {
       return await this.userService.findAllStudents(
-        schoolId, 
-        page, 
-        limit, 
-        gender, 
-        classId, 
-        sortBy, 
+        schoolId,
+        page,
+        limit,
+        gender,
+        classId,
+        sortBy,
         sortOrder,
-        search
+        search,
       );
     } catch (error) {
       throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
-  @Get("/count-by-role")
-  @Roles(UserRole.ADMIN,UserRole.HR)
+  @Get('/count-by-role')
+  @Roles(UserRole.ADMIN, UserRole.HR)
   @ApiOperation({ summary: 'Get all users' })
   @ApiResponse({ status: 200, description: 'Return all users.', type: [User] })
-  @ApiQuery({ 
-    name: 'role', 
-    required: false, 
-    enum: UserRole, 
-    isArray: true, 
+  @ApiQuery({
+    name: 'role',
+    required: false,
+    enum: UserRole,
+    isArray: true,
     description: 'Filter users by role.',
     type: [String],
-    example: ['admin', 'teacher']
+    example: ['admin', 'teacher'],
   })
   findCount(
     @Query('role') role: UserRole[],
-    @LoginUser('schoolId') schoolId: Types.ObjectId
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
   ) {
     return this.userService.findCount(role, schoolId);
   }
@@ -195,7 +236,10 @@ export class UserController {
   @ApiOperation({ summary: 'Get my details' })
   @ApiResponse({ status: 200, description: 'Return the user.', type: User })
   @ApiResponse({ status: 404, description: 'User not found.' })
-  findMyDetails(@LoginUser('userId') userId: string, @LoginUser("schoolId") schoolId) {
+  findMyDetails(
+    @LoginUser('userId') userId: string,
+    @LoginUser('schoolId') schoolId,
+  ) {
     return this.userService.findOne(userId, schoolId);
   }
 
@@ -205,29 +249,59 @@ export class UserController {
   @ApiResponse({ status: 200, description: 'Return the user.', type: User })
   @ApiResponse({ status: 404, description: 'User not found.' })
   @ApiParam({ name: 'id', required: true, description: 'User ID' })
-  findOne(@Param('id') id: string, @LoginUser("schoolId") schoolId) {
+  findOne(@Param('id') id: string, @LoginUser('schoolId') schoolId) {
     return this.userService.findOne(id, schoolId);
   }
 
-  @Patch(':id')
-  @Roles(UserRole.ADMIN,UserRole.HR)
+  @Patch('update-classroom')
+  @Roles(UserRole.ADMIN, UserRole.HR)
   @ApiOperation({ summary: 'Update a user' })
-  @ApiResponse({ status: 200, description: 'The user has been successfully updated.', type: User })
+  @ApiResponse({
+    status: 200,
+    description: 'The user has been successfully updated.',
+    type: User,
+  })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiResponse({ status: 404, description: 'User not found.' })
+  @ApiParam({ name: 'id', required: true, description: 'User ID' })
+  @ApiBody({ type: UpdateClassroomOfStudentsDto })
+  updateClassroom(
+    @Body() updateUserDto: UpdateClassroomOfStudentsDto,
+    @LoginUser('schoolId') schoolId,
+  ) {
+    return this.userService.updateClassroomOfStudents(updateUserDto, schoolId);
+  }
+
+  @Patch(':id')
+  @Roles(UserRole.ADMIN, UserRole.HR)
+  @ApiOperation({ summary: 'Update a user' })
+  @ApiResponse({
+    status: 200,
+    description: 'The user has been successfully updated.',
+    type: User,
+  })
   @ApiResponse({ status: 400, description: 'Bad Request.' })
   @ApiResponse({ status: 404, description: 'User not found.' })
   @ApiParam({ name: 'id', required: true, description: 'User ID' })
   @ApiBody({ type: UpdateUserDto })
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @LoginUser("schoolId") schoolId) {
+  update(
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @LoginUser('schoolId') schoolId,
+  ) {
     return this.userService.update(id, updateUserDto, schoolId);
   }
 
   @Delete(':id')
-  @Roles('admin',UserRole.HR)
+  @Roles('admin', UserRole.HR)
   @ApiOperation({ summary: 'Delete a user' })
-  @ApiResponse({ status: 200, description: 'The user has been successfully deleted.' })
+  @ApiResponse({
+    status: 200,
+    description: 'The user has been successfully deleted.',
+  })
   @ApiResponse({ status: 404, description: 'User not found.' })
   @ApiParam({ name: 'id', required: true, description: 'User ID' })
-  async remove(@Param('id') id: string, @LoginUser("schoolId") schoolId) {
+  async remove(@Param('id') id: string, @LoginUser('schoolId') schoolId) {
     try {
       return await this.userService.remove(id, schoolId);
     } catch (error) {
