@@ -20,7 +20,6 @@ import { User, UserSchema } from 'src/domains/schema/user.schema';
       { name: Subject.name, schema: SubjectSchema },
       { name: TimeTable.name, schema: TimeTableSchema },
       { name: Attendance.name, schema: AttendanceSchema },
-      { name: Syllabus.name, schema: SyllabusSchema },
       { name: StudyMaterial.name, schema: StudyMaterialSchema },
       { name: Result.name, schema: ResultSchema },
       { name: Student.name, schema: StudentSchema },
