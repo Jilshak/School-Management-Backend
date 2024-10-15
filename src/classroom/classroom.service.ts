@@ -19,7 +19,6 @@ import {
   Attendance,
   AttendanceDocument,
 } from '../domains/schema/attendance.schema';
-import { Syllabus, SyllabusDocument } from '../domains/schema/syllabus.schema';
 import {
   StudyMaterial,
   StudyMaterialDocument,
@@ -46,7 +45,6 @@ export class ClassroomService {
     private timeTableModel: Model<TimeTableDocument>,
     @InjectModel(Attendance.name)
     private attendanceModel: Model<AttendanceDocument>,
-    @InjectModel(Syllabus.name) private syllabusModel: Model<SyllabusDocument>,
     @InjectModel(StudyMaterial.name)
     private studyMaterialModel: Model<StudyMaterialDocument>,
     @InjectModel(Student.name) private studentModel: Model<Student>,
@@ -716,75 +714,7 @@ export class ClassroomService {
     }
   }
 
-  async getSyllabus(subjectId: string): Promise<Syllabus> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
 
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
-
-      const syllabus = await this.syllabusModel
-        .findOne({ subjectId })
-        .session(session)
-        .exec();
-      if (!syllabus) {
-        throw new NotFoundException(
-          `Syllabus for subject with ID ${subjectId} not found`,
-        );
-      }
-
-      if (session) {
-        await session.commitTransaction();
-      }
-      return syllabus;
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new InternalServerErrorException('Failed to fetch syllabus');
-    } finally {
-      if (session) {
-        session.endSession();
-      }
-    }
-  }
-
-  async manageSyllabus(
-    createSyllabusDto: CreateSyllabusDto,
-  ): Promise<Syllabus> {
-    let session = null;
-    try {
-      const supportsTransactions = await this.supportsTransactions();
-
-      if (supportsTransactions) {
-        session = await this.connection.startSession();
-        session.startTransaction();
-      }
-
-      const createdSyllabus = new this.syllabusModel(createSyllabusDto);
-      const result = await createdSyllabus.save({ session });
-
-      if (session) {
-        await session.commitTransaction();
-      }
-      return result;
-    } catch (error) {
-      if (session) {
-        await session.abortTransaction();
-      }
-      throw new InternalServerErrorException('Failed to manage syllabus');
-    } finally {
-      if (session) {
-        session.endSession();
-      }
-    }
-  }
 
   async createStudyMaterial(
     createStudyMaterialDto: CreateStudyMaterialDto,

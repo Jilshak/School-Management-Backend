@@ -37,6 +37,7 @@ import { Staff, StaffSchema } from './domains/schema/staff.schema';
 import { Expense, ExpenseSchema } from './domains/schema/expense.schema';
 import { Salary, SalarySchema } from './domains/schema/salary.schema';
 import { Payroll, PayrollSchema } from './domains/schema/payroll.schema';
+import { SyllabusModule } from './syllabus/syllabus.module';
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { Payroll, PayrollSchema } from './domains/schema/payroll.schema';
     SchoolTypeModule,
     AttendanceModule,
     EventModule,
+    SyllabusModule,
   ],
   providers:[PaymentDueCron, NotificationService, WhatsAppService,SalaryDueCron],
   controllers: []
