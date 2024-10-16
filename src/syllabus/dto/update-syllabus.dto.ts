@@ -20,6 +20,11 @@ class UpdateChapterDto {
     @IsString()
     @IsOptional()
     filePath?: string;
+
+    @ApiProperty({ description: 'id of Mongodb' })
+    @IsMongoId()
+    @IsOptional()
+    _id?: string;
 }
 
 class UpdateSubjectDto {

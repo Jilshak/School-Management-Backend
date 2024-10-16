@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Get, Put, Delete, Param, UseGuards, Query } from '@nestjs/common';
+import { Body, Controller, Post, Get, Put, Delete, Param, UseGuards, Query, Patch } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -57,7 +57,7 @@ export class SyllabusController {
         return this.syllabusService.findOne(id, schoolId);
     }
 
-    @Put(':id')
+    @Patch(':id')
     @Roles('admin')
     @ApiOperation({ summary: 'Update a syllabus' })
     @ApiResponse({ status: 200, description: 'Syllabus updated successfully' })

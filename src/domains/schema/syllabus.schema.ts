@@ -3,8 +3,7 @@ import { Document, Types } from 'mongoose';
 
 @Schema()
 class Chapter {
-  @Prop({ type: Types.ObjectId, required: true,unique:true })
-  _id: Types.ObjectId;
+
 
   @Prop({ required: true })
   chapterName: string;
