@@ -316,7 +316,7 @@ export class SyllabusService {
             subject.chapters.map(async (chapter) => {
               let filePath = chapter.filePath;
               if (chapter.pdf) {
-                const chapterId = new Types.ObjectId();
+                const chapterId = new Types.ObjectId(chapter._id);
                 filePath = await this.uploadChapterPdf(
                   chapter.pdf,
                   schoolId.toString(),
@@ -326,7 +326,7 @@ export class SyllabusService {
                 );
               }
               return {
-                _id: new Types.ObjectId(),
+                _id: new Types.ObjectId(chapter._id),
                 chapterName: chapter.name,
                 filePath,
               };

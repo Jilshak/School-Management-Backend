@@ -38,6 +38,7 @@ import { Expense, ExpenseSchema } from './domains/schema/expense.schema';
 import { Salary, SalarySchema } from './domains/schema/salary.schema';
 import { Payroll, PayrollSchema } from './domains/schema/payroll.schema';
 import { SyllabusModule } from './syllabus/syllabus.module';
+import { MCQModule } from './mcq/mcq.module';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { SyllabusModule } from './syllabus/syllabus.module';
     AttendanceModule,
     EventModule,
     SyllabusModule,
+    MCQModule,
   ],
   providers:[PaymentDueCron, NotificationService, WhatsAppService,SalaryDueCron],
   controllers: []
