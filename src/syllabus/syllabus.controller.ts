@@ -38,6 +38,15 @@ export class SyllabusController {
         return this.syllabusService.findAll(schoolId);
     }
 
+    @Get("students")
+    @Roles('student')
+    @ApiOperation({ summary: 'Get all syllabuses for a student' })
+    @ApiResponse({ status: 200, description: 'Return all syllabuses for a student' })
+    @ApiResponse({ status: 404, description: 'No syllabuses found for the student' })
+    async getSyllabusesForStudent(@LoginUser("classId") classId: Types.ObjectId, @LoginUser("schoolId") schoolId: Types.ObjectId) {
+        return this.syllabusService.findOneForStudent(classId, schoolId);
+    }
+
     @Get(':id')
     @Roles('admin', 'teacher')
     @ApiOperation({ summary: 'Get a syllabus by id' })

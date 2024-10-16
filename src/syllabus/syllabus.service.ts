@@ -207,6 +207,85 @@ export class SyllabusService {
     return syllabus[0];
   }
 
+  async findOneForStudent(classId: string | Types.ObjectId, schoolId: Types.ObjectId) {
+    const syllabus = await this.syllabusModel
+      .aggregate([
+        { $match: { assignedClasses: new Types.ObjectId(classId), schoolId } },
+        {
+          $lookup: {
+            from: 'subjects',
+            localField: 'subjects.subjectId',
+            foreignField: '_id',
+            as: 'subjectDetails'
+          }
+        },
+        {
+          $lookup: {
+            from: 'classrooms',
+            localField: 'assignedClasses',
+            foreignField: '_id',
+            as: 'classDetails'
+          }
+        },
+        {
+          $project: {
+            _id: 1,
+            syllabusName: 1,
+            subjects: {
+              $map: {
+                input: '$subjects',
+                as: 'subject',
+                in: {
+                  subjectId: '$$subject.subjectId',
+                  chapters: '$$subject.chapters',
+                  subjectName: {
+                    $arrayElemAt: [
+                      {
+                        $map: {
+                          input: {
+                            $filter: {
+                              input: '$subjectDetails',
+                              as: 'sd',
+                              cond: { $eq: ['$$sd._id', '$$subject.subjectId'] }
+                            }
+                          },
+                          as: 'filteredSubject',
+                          in: '$$filteredSubject.name'
+                        }
+                      },
+                      0
+                    ]
+                  }
+                }
+              }
+            },
+            assignedClasses: {
+              $map: {
+                input: '$classDetails',
+                as: 'class',
+                in: {
+                  _id: '$$class._id',
+                  name: '$$class.name'
+                }
+              }
+            },
+            schoolId: 1,
+            isActive: 1,
+            createdBy: 1,
+            updatedBy: 1,
+            createdAt: 1,
+            updatedAt: 1
+          }
+        }
+      ])
+      .exec();
+
+    if (!syllabus || syllabus.length === 0) {
+      throw new NotFoundException(`Syllabus with ID "${classId}" not found`);
+    }
+    return syllabus;
+  }
+
   async update(
     id: string,
     updateSyllabusDto: UpdateSyllabusDto,
