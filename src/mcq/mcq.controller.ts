@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { RolesGuard } from 'src/shared/guards/roles.guard';
 import { McqService } from './mcq.service';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -61,5 +61,25 @@ export class McqController {
     delete(@Param('id') id: string,@LoginUser("schoolId") schoolId:Types.ObjectId) {
         return this.mcqService.delete(id,schoolId);
     }
+
+    @Get('start-mcq')
+    @Roles('admin', 'teacher',"student")
+    @ApiOperation({ summary: 'Start MCQ' })
+    @ApiResponse({ status: 200, description: 'MCQ started successfully' })
+    @ApiResponse({ status: 400, description: 'Bad Request' })
+    @ApiQuery({ name: 'questionCount', type: Number, required: true, description: 'Number of questions to start the MCQ' })
+    @ApiQuery({name:"chapterId",type:[String],required:true,description:"Chapter Id"})
+    startMcq(@Query('chapterId') chapterId: string[],@Query('questionCount') questionCount: number,@LoginUser("schoolId") schoolId:Types.ObjectId) {
+        return this.mcqService.startMcq(chapterId,questionCount,schoolId);
+    }
     
+    @Get('get-mcq-answers')
+    @Roles('admin', 'teacher',"student")
+    @ApiOperation({ summary: 'Get MCQ answers' })
+    @ApiResponse({ status: 200, description: 'MCQ answers fetched successfully' })
+    @ApiResponse({ status: 400, description: 'Bad Request' })
+    @ApiQuery({ name: 'mcqId', type: [String], required: true, description: 'MCQ Id' })
+    getMcqAnswers(@Query('mcqId') mcqId: string[],@LoginUser("schoolId") schoolId:Types.ObjectId) {
+        return this.mcqService.getMcqAnswers(mcqId,schoolId);
+    }
 }

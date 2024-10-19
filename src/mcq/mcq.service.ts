@@ -263,4 +263,40 @@ export class McqService {
       throw err;
     }
   }
+
+  async startMcq(chapterId: string[], questionCount: number, schoolId: string | Types.ObjectId) {
+    try {
+      const mcqs = await this.mcqModel.aggregate([
+        { $match: { schoolId: new Types.ObjectId(schoolId) } },
+        { $match: { chapterId: { $in: chapterId.map(id => new Types.ObjectId(id)) } } },
+        { $sample: { size:parseInt(questionCount+"") } },
+        {$project:{
+          correctAnswer:0,
+        }}
+      ]);
+      return mcqs;
+    } catch (err) {
+      throw err;
+    }}
+
+  async getMcqAnswers(mcqId: string[],schoolId: string | Types.ObjectId) {
+    try {
+      const mcqs = await this.mcqModel.aggregate([
+        {
+          $match: {
+            _id: { $in: mcqId.map(id => new Types.ObjectId(id)) },
+            schoolId: new Types.ObjectId(schoolId)
+          }
+        },
+        {
+          $project: {
+            correctAnswer: 1
+          }
+        }
+      ]);
+      return mcqs;
+    } catch (err) {
+      throw err;
+    }
+  }
 }
