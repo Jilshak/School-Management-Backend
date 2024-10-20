@@ -772,6 +772,7 @@ export class UserService {
       email: dto.email,
       address: dto.address,
       joinDate: dto.joinDate,
+      state: dto.state,
       department: dto.department,
       bloodGroup: dto.bloodGroup,
       position: dto.position,
