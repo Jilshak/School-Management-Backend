@@ -23,49 +23,24 @@ jobs:
         with:
           node-version: '20'  # Set your Node.js version here
 
-      # Step 3: Install dependencies
-      - name: Install dependencies
-        run: npm install
-
-      # Step 5: Build the NestJS app
-      - name: Build NestJS app
-        run: npm run build
-
-      # Step 6: Upload build artifacts
-      - name: Upload production-ready files as artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: build-files
-          path: ./dist  # Adjust if your build path is different
-
   deploy:
     needs: build
     runs-on: ubuntu-latest
 
     steps:
-      # Step 7: Download the build artifacts
-      - name: Download build artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: build-files
-
-      # Step 8: Copy files to the server using SCP
-      - name: Copy files to the server
-        uses: appleboy/scp-action@v0.1.4
-        with:
-          host: ${{ secrets.DO_SERVER_IP }}
-          username: ${{ secrets.DO_SERVER_USER }}
-          password: ${{ secrets.DO_SERVER_PASSWORD }}
-          source: ./dist/  # Path to your built files
-          target: ~/production/School-Management-Nest-Backend/dist  # Adjust to the path on your server
-
-      # Step 9: Restart PM2 and Nginx on the server
-      - name: Restart services on the server
+  
+      - name: Execute SSH Commands on the Server
         uses: appleboy/ssh-action@v0.1.3
         with:
-          host: ${{ secrets.DO_SERVER_IP }}
-          username: ${{ secrets.DO_SERVER_USER }}
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.DO_SERVER_PASSWORD }}
+          port: 22  # Adjust if needed
           script: |
-            pm2 restart all  # Restart the NestJS app managed by PM2
-            systemctl restart nginx  # Restart Nginx
+            cd ~/production/School-Management-Nest-Backend
+            git pull origin main
+            npm install
+            npm run build
+            pm2 restart all
+            systemctl restart nginx
+
