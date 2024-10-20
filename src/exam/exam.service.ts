@@ -346,7 +346,7 @@ export class ExamService {
   async findAllOfflineExamsForStudent(
     classId: Types.ObjectId,
     schoolId: Types.ObjectId,
-    studentId?:Types.ObjectId,
+    studentId?: Types.ObjectId,
   ) {
     try {
       const classTests = await this.classTestModel.aggregate([
@@ -507,8 +507,8 @@ export class ExamService {
         (a, b) =>
           new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
       );
-      if(studentId){
 
+      if (studentId) {
         combinedExams = await Promise.all(combinedExams.map(async (exam) => {
           const results = await this.getExistingResultOfStudent(studentId, exam._id, schoolId);
           
@@ -516,13 +516,22 @@ export class ExamService {
             const totalMarks = results.reduce((sum, result) => sum + result.score, 0);
             const totalSubjects = results.length;
             exam.score = totalSubjects > 0 ? totalMarks / totalSubjects : 0;
+            
+            // Calculate total mark and percentage for Sem Exam
+            const totalPossibleMarks = exam.exams.reduce((sum, subExam) => sum + subExam.totalMark, 0);
+            exam.totalMark = totalPossibleMarks;
+            exam.percentage = totalPossibleMarks > 0 ? (totalMarks / totalPossibleMarks) * 100 : 0;
           } else {
             exam.score = results.length > 0 ? results[0].score : 0;
+            
+            // Calculate percentage for Class Test
+            exam.percentage = exam.totalMark > 0 ? (exam.score / exam.totalMark) * 100 : 0;
           }
 
           return exam;
         }));
-    }
+      }
+
       return {
         exams: combinedExams,
         total:

@@ -86,7 +86,7 @@ export class ExamController {
     @Param('classId') classId: string,
     @LoginUser("schoolId") schoolId: Types.ObjectId,
     @Query('studentId') studentId?: string
-  ) {
+  ) { 
     return this.examService.findAllOfflineExamsForStudent(new Types.ObjectId(classId), schoolId,new Types.ObjectId(studentId));
   }
 
