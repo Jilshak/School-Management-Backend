@@ -227,4 +227,18 @@ export class ExamController {
     return this.examService.updateMarkOfResult(updateMarkDto,schoolId)
   }
 
+  @Get('student-performance')
+  @Roles(UserRole.TEACHER, UserRole.ADMIN, UserRole.STUDENT)
+  @ApiOperation({ summary: 'Get student subject-wise performance in percentage' })
+  @ApiResponse({ status: 200, description: 'Returns the student subject-wise performance.' })
+  @ApiQuery({ name: 'studentId', required: true, type: String })
+  @ApiQuery({ name: 'examType', required: false, enum: ['Class Test', 'Sem Exam'] })
+  getStudentPerformance(
+    @Query('studentId') studentId: string,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+    @Query('examType') examType?: 'Class Test' | 'Sem Exam',
+  ) {
+    return this.examService.getStudentPerformance(new Types.ObjectId(studentId), schoolId, examType);
+  }
+
 }

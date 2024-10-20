@@ -862,7 +862,7 @@ export class ExamService {
         {
           $match: {
             studentId: studentId,
-            examId:new Types.ObjectId(examId),
+            examId: new Types.ObjectId(examId),
             schoolId: new Types.ObjectId(schoolId),
           }
         },
@@ -898,19 +898,61 @@ export class ExamService {
             examDetails: {
               $cond: {
                 if: { $gt: [{ $size: '$classTestDetails' }, 0] },
-                then: { $arrayElemAt: ['$classTestDetails', 0] },
-                else: { $arrayElemAt: ['$semExamDetails', 0] }
+                then: {
+                  $mergeObjects: [
+                    { $arrayElemAt: ['$classTestDetails', 0] },
+                    { 
+                      examType: 'Class Test',
+                      exams: [{ $arrayElemAt: ['$classTestDetails', 0] }]
+                    }
+                  ]
+                },
+                else: {
+                  $mergeObjects: [
+                    { $arrayElemAt: ['$semExamDetails', 0] },
+                    { examType: 'Sem Exam' }
+                  ]
+                }
               }
             }
           }
         },
         {
           $project: {
-            classTestDetails: 0,
-            semExamDetails: 0
+            _id: 1,
+            score: 1,
+            studentId: 1,
+            examId: 1,
+            subjectId: 1,
+            schoolId: 1,
+            'subjectDetails._id': 1,
+            'subjectDetails.name': 1,
+            examDetails: {
+              _id: 1,
+              date: 1,
+              classId: 1,
+              schoolId: 1,
+              examType: 1,
+              exams: {
+                $cond: {
+                  if: { $eq: ['$examDetails.examType', 'Class Test'] },
+                  then: [{
+                    subjectId: '$examDetails.subjectId',
+                    totalMark: '$examDetails.totalMark',
+                    date: '$examDetails.date',
+                    startTime: { $ifNull: ['$examDetails.startTime', null] },
+                    endTime: { $ifNull: ['$examDetails.endTime', null] },
+                    description: { $ifNull: ['$examDetails.description', null] }
+                  }],
+                  else: '$examDetails.exams'
+                }
+              }
+            }
           }
         }
       ]);
+
+      console.log(JSON.stringify(results, null, 2));
       return results;
     } catch (error) {
       this.handleError(error, 'Failed to get existing result of student');
@@ -1018,5 +1060,166 @@ export class ExamService {
     }));
 
     return this.resultModel.bulkWrite(bulkOps);
+  }
+
+  async getStudentPerformance(studentId: Types.ObjectId, schoolId: Types.ObjectId, examType?: 'Class Test' | 'Sem Exam') {
+    try {
+      const matchStage: any = {
+        schoolId: new Types.ObjectId(schoolId),
+        studentId: new Types.ObjectId(studentId)
+      };
+
+      if (examType) {
+        matchStage.examType = examType;
+      }
+
+      const results = await this.resultModel.aggregate([
+        {
+          $lookup: {
+            from: 'classtests',
+            localField: 'examId',
+            foreignField: '_id',
+            as: 'classTest'
+          }
+        },
+        {
+          $lookup: {
+            from: 'semexams',
+            localField: 'examId',
+            foreignField: '_id',
+            as: 'semExam'
+          }
+        },
+        {
+          $addFields: {
+            examType: {
+              $cond: {
+                if: { $gt: [{ $size: '$classTest' }, 0] },
+                then: 'Class Test',
+                else: 'Sem Exam'
+              }
+            },
+            totalMark: {
+              $cond: {
+                if: { $gt: [{ $size: '$classTest' }, 0] },
+                then: { $arrayElemAt: ['$classTest.totalMark', 0] },
+                else: {
+                  $let: {
+                    vars: {
+                      semExam: { $arrayElemAt: ['$semExam', 0] }
+                    },
+                    in: {
+                      $let: {
+                        vars: {
+                          examDetail: {
+                            $arrayElemAt: [
+                              {
+                                $filter: {
+                                  input: '$$semExam.exams',
+                                  cond: { $eq: ['$$this.subjectId', '$subjectId'] }
+                                }
+                              },
+                              0
+                            ]
+                          }
+                        },
+                        in: '$$examDetail.totalMark'
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          $match: matchStage
+        },
+        {
+          $lookup: {
+            from: 'students',
+            localField: 'studentId',
+            foreignField: 'userId',
+            as: 'student'
+          }
+        },
+        {
+          $unwind: '$student'
+        },
+        {
+          $lookup: {
+            from: 'subjects',
+            localField: 'subjectId',
+            foreignField: '_id',
+            as: 'subject'
+          }
+        },
+        {
+          $unwind: '$subject'
+        },
+        {
+          $group: {
+            _id: {
+              subjectId: '$subjectId',
+              examType: '$examType'
+            },
+            studentName: { $first: { $concat: ['$student.firstName', ' ', '$student.lastName'] } },
+            subjectName: { $first: '$subject.name' },
+            totalScore: { $sum: '$score' },
+            totalPossibleScore: { $sum: '$totalMark' },
+            examCount: { $sum: 1 }
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            examType: '$_id.examType',
+            subjectId: '$_id.subjectId',
+            subjectName: 1,
+            averagePercentage: {
+              $multiply: [
+                { $divide: ['$totalScore', '$totalPossibleScore'] },
+                100
+              ]
+            },
+            examCount: 1
+          }
+        },
+        {
+          $group: {
+            _id: '$examType',
+            subjects: {
+              $push: {
+                subjectId: '$subjectId',
+                subjectName: '$subjectName',
+                averagePercentage: { $round: ['$averagePercentage', 2] },
+                examCount: '$examCount'
+              }
+            }
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            examType: '$_id',
+            subjects: 1
+          }
+        },
+        {
+          $sort: { examType: 1 }
+        }
+      ]);
+
+      const student = await this.studentModel.findOne({ userId: studentId });
+      const studentName = student ? `${student.firstName} ${student.lastName}` : 'Unknown';
+
+      return {
+        studentId,
+        studentName,
+        performance: results
+      };
+    } catch (error) {
+      this.handleError(error, 'Failed to get student performance');
+    }
   }
 }
