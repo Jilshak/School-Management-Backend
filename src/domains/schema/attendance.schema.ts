@@ -16,6 +16,12 @@ class StudentAttendance {
 
   @Prop({ type: String, enum: AttendanceStatus, required: true })
   status: AttendanceStatus;
+
+  @Prop({ type: String, required: false })
+  remark: string;
+
+  @Prop({ type: Boolean, required: false, default: false })
+  isRegularized: boolean;
 }
 
 @Schema({timestamps:true})

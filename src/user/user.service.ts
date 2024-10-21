@@ -19,6 +19,7 @@ import { CustomError } from '../common/errors/custom-error';
 import { HttpStatus } from '@nestjs/common';
 import { FileUploadUtil } from 'src/utils/file-upload.util';
 import { WhatsAppService } from 'src/notification/whatsapp.service';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Injectable()
 export class UserService {
@@ -362,7 +363,7 @@ export class UserService {
         ];
       }
 
-      let aggregatePipeline: any = [
+      const aggregatePipeline: any = [
         { $match: query },
         {
           $lookup: {
@@ -525,7 +526,6 @@ export class UserService {
         session = await this.connection.startSession();
         session.startTransaction();
       }
-
       let user: any = await this.userModel
         .findOne({ _id: new Types.ObjectId(id), schoolId, isActive: true })
         .session(session)
@@ -558,7 +558,7 @@ export class UserService {
           },
           {
             $lookup: {
-              from: 'teachers',
+              from: 'staffs',
               localField: 'classTeacherId',
               foreignField: 'userId',
               as: 'classTeacher',
@@ -1236,6 +1236,65 @@ export class UserService {
     }
   }
 
+  async resetPassword(
+    id: string,
+    resetPasswordDto: ResetPasswordDto,
+    schoolId: Types.ObjectId,
+  ): Promise<User> {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+  
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+  
+      const hashedPassword = await bcrypt.hash(resetPasswordDto.password, 10);
+  
+      const updatedUser = await this.userModel
+        .findOneAndUpdate(
+          { _id: new Types.ObjectId(id), schoolId },
+          {
+            $set: {
+              username: resetPasswordDto.username,
+              password: hashedPassword,
+            },
+          },
+          { new: true, session },
+        )
+        .exec();
+  
+      if (!updatedUser) {
+        throw new CustomError(
+          HttpStatus.NOT_FOUND,
+          `User with ID ${id} not found`,
+        );
+      }
+  
+      if (session) {
+        await session.commitTransaction();
+      }
+  
+      return updatedUser;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof CustomError) {
+        throw error;
+      }
+      throw new CustomError(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to reset password',
+      );
+    } finally {
+      if (session) {
+        await session.endSession();
+      }
+    }
+  }
+
   async findOneEmployee(id: string): Promise<any> {
     let session = null;
     try {
@@ -1284,6 +1343,7 @@ export class UserService {
     updateEmployeeDto: CreateEmployeeDto,
   ): Promise<any> {
     let session = null;
+    console.log('reaching ehre alright!!');
     try {
       const supportsTransactions = await this.supportsTransactions();
 
@@ -1364,5 +1424,13 @@ export class UserService {
         session.endSession();
       }
     }
+  }
+
+  async isUsernameAvailable(username: string): Promise<boolean> {
+    if (username.length < 3) {
+      return false;
+    }
+    const existingUser = await this.userModel.findOne({ username }).exec();
+    return !existingUser;
   }
 }

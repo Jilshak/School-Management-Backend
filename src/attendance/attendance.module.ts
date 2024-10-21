@@ -11,6 +11,7 @@ import { Leave, LeaveSchema } from 'src/domains/schema/leave.schema';
 import { NotificationService } from 'src/notification/notification.service';
 import { WhatsAppService } from 'src/notification/whatsapp.service';
 import { School, SchoolSchema } from 'src/domains/schema/school.schema';
+import { AttendanceRegularization, AttendanceRegularizationSchema } from 'src/domains/schema/attendance-regularization.schema';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { School, SchoolSchema } from 'src/domains/schema/school.schema';
       { name: Classroom.name, schema: ClassroomSchema },
       { name: Leave.name, schema: LeaveSchema },
       { name: School.name, schema: SchoolSchema },
+      { name: AttendanceRegularization.name, schema: AttendanceRegularizationSchema },
     ]),
     GuardsModule,
   ],

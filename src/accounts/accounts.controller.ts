@@ -74,8 +74,8 @@ export class AccountsController {
     @Res() res
   ) {
     try {
-      let html:string = await this.accountsService.generatePaymentReciept(id, schoolId);
-      let fileContent: string | Buffer = html;
+      const html:string = await this.accountsService.generatePaymentReciept(id, schoolId);
+      const fileContent: string | Buffer = html;
       let contentType: string;
       let fileExtension: string;
     

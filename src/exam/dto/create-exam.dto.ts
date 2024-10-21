@@ -15,6 +15,11 @@ export class ExamDto{
   @IsString()
   subjectId: string;
 
+  @ApiProperty({ description: 'The out of marks of the exam' })
+  @IsNotEmpty()
+  @IsNumber()
+  outOf: number;
+
   @ApiProperty({ description: 'The date of the exam' })
   @IsNotEmpty()
   @IsDate()
@@ -56,8 +61,6 @@ export class CreateSemExamDto {
   @IsMongoId()
   @Type(()=>Types.ObjectId)
   classId: string;
-
- 
 }
 
 export class CreateClassTest {
@@ -96,6 +99,5 @@ export class CreateClassTest {
   @IsOptional()
   @IsString()
   description?: string
-
  
 }

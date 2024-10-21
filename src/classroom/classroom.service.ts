@@ -120,7 +120,7 @@ export class ClassroomService {
         session.startTransaction();
       }
 
-      let aggregationPipeline: any[] = [
+      const aggregationPipeline: any[] = [
         { $match: { schoolId: new Types.ObjectId(schoolId), isActive } },
         {
           $lookup: {
@@ -279,7 +279,7 @@ export class ClassroomService {
         session.startTransaction();
       }
 
-      let aggregationPipeline: any[] = [
+      const aggregationPipeline: any[] = [
         { $match: { schoolId: new Types.ObjectId(schoolId), isActive } },
         {
           $lookup: {
