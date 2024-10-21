@@ -1,6 +1,8 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
@@ -15,6 +17,8 @@ import { Classroom } from 'src/domains/schema/classroom.schema';
 import { LeaveReqDto } from './dto/create-leave-request.dto';
 import { Leave } from 'src/domains/schema/leave.schema';
 import { NotificationService } from 'src/notification/notification.service';
+import { AttendanceRegularization } from '../domains/schema/attendance-regularization.schema';
+import { CreateRegularizationDto } from './dto/regularization.dto';
 
 @Injectable()
 export class AttendanceService {
@@ -26,6 +30,8 @@ export class AttendanceService {
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Classroom.name) private classroomModel: Model<Classroom>,
     @InjectModel(Leave.name) private leaveModel: Model<Leave>,
+    @InjectModel(AttendanceRegularization.name)
+    private attendanceRegularizationModel: Model<AttendanceRegularization>,
   ) {}
 
   async create(
@@ -80,6 +86,7 @@ export class AttendanceService {
             ...student,
             studentId: new Types.ObjectId(student.studentId),
             remark: student.remark || '', // Ensure remark is always present
+            isRegularized: false,
           }),
         );
       } else {
@@ -239,35 +246,21 @@ export class AttendanceService {
     studentId: string | Types.ObjectId,
     schoolId: Types.ObjectId,
     month?: number,
+    year?: number
   ): Promise<any> {
     try {
       const studentObjectId = new Types.ObjectId(studentId);
       const currentDate = new Date();
       const targetMonth = month !== undefined ? month : currentDate.getMonth();
-
-      // Determine the academic year
-      const academicYearStart = 8; // September (0-based index)
-      let targetYear = currentDate.getFullYear();
-
-      if (targetMonth < academicYearStart) {
-        targetYear =
-          currentDate.getMonth() < academicYearStart
-            ? currentDate.getFullYear()
-            : currentDate.getFullYear() + 1;
-      } else {
-        targetYear =
-          currentDate.getMonth() >= academicYearStart
-            ? currentDate.getFullYear()
-            : currentDate.getFullYear() - 1;
-      }
-
+      const targetYear = year !== undefined ? year : currentDate.getFullYear();
+  
       const firstDayOfMonth = new Date(targetYear, targetMonth, 1);
       const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0);
-
+  
       const result = await this.studentModel.aggregate([
         // Match the student
         { $match: { userId: studentObjectId } },
-
+  
         // Lookup and unwind the user document
         {
           $lookup: {
@@ -278,10 +271,10 @@ export class AttendanceService {
           },
         },
         { $unwind: '$user' },
-
+  
         // Match the school
         { $match: { 'user.schoolId': schoolId } },
-
+  
         // Lookup attendance records
         {
           $lookup: {
@@ -318,7 +311,7 @@ export class AttendanceService {
             as: 'attendanceReport',
           },
         },
-
+  
         // Project the final result
         {
           $project: {
@@ -331,11 +324,11 @@ export class AttendanceService {
           },
         },
       ]);
-
+  
       if (result.length === 0) {
         throw new NotFoundException('Student not found');
       }
-
+  
       return result[0];
     } catch (err) {
       throw err;
@@ -622,6 +615,305 @@ export class AttendanceService {
       return { message: 'Leave request deleted successfully' };
     } catch (error) {
       throw error;
+    }
+  }
+
+  async createRegularizationRequest(
+    createRegularizationDto: CreateRegularizationDto,
+    studentId: Types.ObjectId,
+    classId: Types.ObjectId,
+  ) {
+    try {
+      const student = await this.studentModel
+        .findOne({ userId: studentId })
+        .lean();
+      if (!student) {
+        throw new NotFoundException('Student not found');
+      }
+
+      const existingRequest = await this.attendanceRegularizationModel.findOne({
+        studentId,
+        classId,
+        date: createRegularizationDto.date,
+        status: 'pending',
+      });
+
+
+      if (existingRequest) {
+        throw new BadRequestException(
+          'A regularization request for this date is already pending',
+        );
+      }
+
+      const newRegularization = new this.attendanceRegularizationModel({
+        ...createRegularizationDto,
+        studentId,
+        classId,
+        status: 'pending',
+        studentName: `${student.firstName} ${student.lastName}`,
+      });
+
+      const savedRegularization = await newRegularization.save();
+
+      return {
+        message: 'Regularization request created successfully',
+        regularization: savedRegularization,
+      };
+    } catch (error) {
+      // Check if the error is a BadRequestException and rethrow it
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      // Handle other errors
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      console.error('Error creating regularization request:', error);
+
+      throw new InternalServerErrorException(
+        'Failed to create regularization request',
+      );
+    }
+  }
+
+  async getRegularizationRequests(
+    studentId: Types.ObjectId,
+    classId: Types.ObjectId,
+  ) {
+    try {
+      const regularizationRequests = await this.attendanceRegularizationModel
+        .find({
+          studentId,
+          classId,
+        })
+        .sort({ createdAt: -1 })
+        .exec();
+
+      if (!regularizationRequests || regularizationRequests.length === 0) {
+        throw new NotFoundException(
+          'No regularization requests found for this student.',
+        );
+      }
+
+      return regularizationRequests;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to fetch regularization requests.',
+      );
+    }
+  }
+
+  async getRegularizationRequestsTeacher(teacherId: Types.ObjectId) {
+    try {
+      const classroom = await this.classroomModel.findOne({
+        classTeacherId: teacherId,
+        isActive: true,
+      });
+  
+      if (!classroom) {
+        throw new NotFoundException('No active classroom found for this teacher.');
+      }
+  
+      const classId = classroom._id;
+  
+      const regularizationRequests = await this.attendanceRegularizationModel
+        .find({
+          classId,
+        })
+        .sort({ createdAt: -1 })
+        .exec();
+      if (!regularizationRequests || regularizationRequests.length === 0) {
+        throw new NotFoundException(
+          'No regularization requests found for this class.',
+        );
+      }
+  
+      return regularizationRequests;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to fetch regularization requests.',
+      );
+    }
+  }
+
+  async updateRegularizationRequest(
+    regularizationId: string | Types.ObjectId,
+    updateRegularizationDto: Partial<CreateRegularizationDto>,
+    studentId: Types.ObjectId,
+    classId: Types.ObjectId,
+  ) {
+    try {
+      const regularizationObjectId = new Types.ObjectId(regularizationId);
+
+      const existingRequest = await this.attendanceRegularizationModel.findOne({
+        _id: regularizationObjectId,
+        studentId,
+        classId,
+        status: 'pending',
+      });
+
+      if (!existingRequest) {
+        throw new NotFoundException(
+          'Regularization request not found or cannot be updated',
+        );
+      }
+
+      const updatedRequest =
+        await this.attendanceRegularizationModel.findByIdAndUpdate(
+          regularizationObjectId,
+          { $set: updateRegularizationDto },
+          { new: true },
+        );
+
+      if (!updatedRequest) {
+        throw new InternalServerErrorException(
+          'Failed to update regularization request',
+        );
+      }
+
+      return updatedRequest;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'An error occurred while updating the regularization request',
+      );
+    }
+  }
+
+
+  async approveOrRejectRegularizationRequest(
+    regularizationId: string,
+    status: 'approved' | 'rejected',
+    type: 'halfDay' | 'fullDay',
+    teacherId: Types.ObjectId,
+  ) {
+    try {
+      console.log(regularizationId, status, teacherId, 'regularizationId, status, teacherId')
+      const regularizationObjectId = new Types.ObjectId(regularizationId);
+
+      // Check if the teacher is authorized to approve this request
+      const classroom = await this.classroomModel.findOne({
+        classTeacherId: teacherId,
+        isActive: true,
+      });
+
+      if (!classroom) {
+        throw new ForbiddenException('You are not authorized to approve this request');
+      }
+
+      const regularizationRequest = await this.attendanceRegularizationModel.findOne({
+        _id: regularizationObjectId,
+        classId: classroom._id,
+      });
+
+      if (!regularizationRequest) {
+        throw new NotFoundException('Regularization request not found or already processed');
+      }
+
+      regularizationRequest.status = status;
+      regularizationRequest.type = type;
+      await regularizationRequest.save();
+
+      if (status === 'approved') {
+        await this.attendanceModel.updateOne(
+          {
+            classId: classroom._id,
+            attendanceDate: regularizationRequest.date,
+            'studentsAttendance.studentId': regularizationRequest.studentId,
+          },
+          {
+            $set: {
+              'studentsAttendance.$.status': type === 'halfDay' ? 'halfday' : 'present',
+              'studentsAttendance.$.isRegularized': true,
+            },
+          }
+        );
+      }else{
+        await this.attendanceModel.updateOne(
+          {
+            classId: classroom._id,
+            attendanceDate: regularizationRequest.date,
+            'studentsAttendance.studentId': regularizationRequest.studentId,
+          },
+          { $set: { 'studentsAttendance.$.status': 'absent' } }
+        );
+      }
+
+      // Notify the student
+      const student = await this.userModel.findById(regularizationRequest.studentId);
+      if (student && student.fcmToken) {
+        const notificationMessage = status === 'approved'
+          ? 'Your attendance regularization request has been approved.'
+          : 'Your attendance regularization request has been rejected.';
+        
+        student.fcmToken.forEach(async (token) => {
+          await this.notificationService.sendNotification(
+            token,
+            'Regularization Request Update',
+            notificationMessage
+          );
+        });
+      }
+
+      return {
+        message: `Regularization request ${status}`,
+        regularization: regularizationRequest,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof ForbiddenException) {
+        throw error;
+      }
+      console.error('Error approving regularization request:', error);
+      throw new InternalServerErrorException('Failed to process regularization request');
+    }
+  }
+
+  async deleteRegularizationRequest(
+    regularizationId: string | Types.ObjectId,
+    studentId: Types.ObjectId,
+    classId: Types.ObjectId,
+  ) {
+    try {
+      const regularizationObjectId = new Types.ObjectId(regularizationId);
+  
+      const existingRequest = await this.attendanceRegularizationModel.findOne({
+        _id: regularizationObjectId,
+        studentId,
+        classId,
+        status: 'pending',
+      });
+  
+      if (!existingRequest) {
+        throw new NotFoundException(
+          'Regularization request not found or cannot be deleted',
+        );
+      }
+  
+      const result = await this.attendanceRegularizationModel.deleteOne({
+        _id: regularizationObjectId,
+      });
+  
+      if (result.deletedCount === 0) {
+        throw new BadRequestException('Failed to delete regularization request');
+      }
+  
+      return { message: 'Regularization request deleted successfully' };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'An error occurred while deleting the regularization request',
+      );
     }
   }
 }
