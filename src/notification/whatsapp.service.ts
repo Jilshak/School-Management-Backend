@@ -7,52 +7,134 @@ export class WhatsAppService {
 
   async sendMessage(phoneNumber: string, username: string, password: string) {
     const myHeaders = new Headers();
-    myHeaders.append("Content-Type", "application/json");
-    myHeaders.append("authkey", this.configService.get<string>('MSG91_AUTH_KEY'));
+    myHeaders.append('Content-Type', 'application/json');
+    myHeaders.append(
+      'authkey',
+      this.configService.get<string>('MSG91_AUTH_KEY'),
+    );
 
     const raw = JSON.stringify({
-      "integrated_number": this.configService.get<string>('MSG91_INTEGRATED_NUMBER'),
-      "content_type": "template",
-      "payload": {
-        "messaging_product": "whatsapp",
-        "type": "template",
-        "template": {
-          "name": "username_and_password",
-          "language": {
-            "code": "en",
-            "policy": "deterministic"
+      integrated_number: this.configService.get<string>(
+        'MSG91_INTEGRATED_NUMBER',
+      ),
+      content_type: 'template',
+      payload: {
+        messaging_product: 'whatsapp',
+        type: 'template',
+        template: {
+          name: 'username_and_password',
+          language: {
+            code: 'en',
+            policy: 'deterministic',
           },
-          "namespace": null,
-          "to_and_components": [
+          namespace: null,
+          to_and_components: [
             {
-              "to": [
-                phoneNumber
-              ],
-              "components": {
-                "body_1": {
-                  "type": "text",
-                  "value": username
+              to: [phoneNumber],
+              components: {
+                body_1: {
+                  type: 'text',
+                  value: username,
                 },
-                "body_2": {
-                  "type": "text",
-                  "value": password
-                }
-              }
-            }
-          ]
-        }
-      }
+                body_2: {
+                  type: 'text',
+                  value: password,
+                },
+              },
+            },
+          ],
+        },
+      },
     });
 
     const requestOptions: RequestInit = {
       method: 'POST',
       headers: myHeaders,
       body: raw,
-      redirect: 'follow'
+      redirect: 'follow',
     };
 
     try {
-      const response = await fetch(this.configService.get<string>('WHATSAPP_API_URL'), requestOptions);
+      const response = await fetch(
+        this.configService.get<string>('WHATSAPP_API_URL'),
+        requestOptions,
+      );
+      const result = await response.text();
+      return { success: true, result };
+    } catch (error) {
+      console.error('error', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async attendenceNotify(
+    phoneNumber: string[],
+    studentName: string,
+    schoolName: string,
+    className: string,
+    attendanceStatus: 'Absent' | 'Half Day',
+  ) {
+    const myHeaders = new Headers();
+    myHeaders.append('Content-Type', 'application/json');
+    myHeaders.append(
+      'authkey',
+      this.configService.get<string>('MSG91_AUTH_KEY'),
+    );
+
+    const raw = JSON.stringify({
+      integrated_number: this.configService.get<string>(
+        'MSG91_INTEGRATED_NUMBER',
+      ),
+      content_type: 'template',
+      payload: {
+        messaging_product: 'whatsapp',
+        type: 'template',
+        template: {
+          name: 'attendance_notify',
+          language: {
+            code: 'en',
+            policy: 'deterministic',
+          },
+          namespace: null,
+          to_and_components: [
+            {
+              to: [...phoneNumber],
+              components: {
+                body_1: {
+                  type: 'text',
+                  value: studentName,
+                },
+                body_2: {
+                  type: 'text',
+                  value: schoolName,
+                },
+                body_3: {
+                  type: 'text',
+                  value: className,
+                },
+                body_4: {
+                  type: 'text',
+                  value: attendanceStatus,
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    const requestOptions: RequestInit = {
+      method: 'POST',
+      headers: myHeaders,
+      body: raw,
+      redirect: 'follow',
+    };
+
+    try {
+      const response = await fetch(
+        this.configService.get<string>('WHATSAPP_API_URL'),
+        requestOptions,
+      );
       const result = await response.text();
       return { success: true, result };
     } catch (error) {

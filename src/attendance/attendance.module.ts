@@ -9,6 +9,8 @@ import { Classroom, ClassroomSchema } from 'src/domains/schema/classroom.schema'
 import { GuardsModule } from '../guards/guards.module';
 import { Leave, LeaveSchema } from 'src/domains/schema/leave.schema';
 import { NotificationService } from 'src/notification/notification.service';
+import { WhatsAppService } from 'src/notification/whatsapp.service';
+import { School, SchoolSchema } from 'src/domains/schema/school.schema';
 
 @Module({
   imports: [
@@ -18,10 +20,11 @@ import { NotificationService } from 'src/notification/notification.service';
       { name: User.name, schema: UserSchema },
       { name: Classroom.name, schema: ClassroomSchema },
       { name: Leave.name, schema: LeaveSchema },
+      { name: School.name, schema: SchoolSchema },
     ]),
     GuardsModule,
   ],
   controllers: [AttendanceController],
-  providers: [AttendanceService,NotificationService],
+  providers: [AttendanceService,NotificationService,WhatsAppService],
 })
 export class AttendanceModule {}

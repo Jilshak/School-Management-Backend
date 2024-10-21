@@ -11,6 +11,8 @@ import { Classroom } from 'src/domains/schema/classroom.schema';
 import { LeaveReqDto } from './dto/create-leave-request.dto';
 import { Leave } from 'src/domains/schema/leave.schema';
 import { NotificationService } from 'src/notification/notification.service';
+import { WhatsAppService } from 'src/notification/whatsapp.service';
+import { School } from 'src/domains/schema/school.schema';
 
 @Injectable()
 export class AttendanceService {
@@ -18,6 +20,8 @@ export class AttendanceService {
     @InjectModel(Attendance.name)
     private attendanceModel: Model<Attendance>,
     private notificationService: NotificationService,
+    private whatsappService: WhatsAppService,
+    @InjectModel(School.name) private schoolModel: Model<School>,
     @InjectModel(Student.name) private studentModel: Model<Student>,
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Classroom.name) private classroomModel: Model<Classroom>,
@@ -59,6 +63,14 @@ export class AttendanceService {
           studentId: new Types.ObjectId(student.studentId),
         })),
       });
+      const classroom = await this.classroomModel.findOne({_id:classId})
+      const school = await this.schoolModel.findOne({_id:schoolId})
+      newAttendance.studentsAttendance.forEach(async (student) => {
+        if(student.status.toLowerCase() === "absent"){
+        const user = await this.studentModel.findOne({userId:new Types.ObjectId(student.studentId)})
+          await this.whatsappService.attendenceNotify([user.contactNumber,user.parentsDetails.guardianContactNumber],`${user.firstName} ${user.lastName}`,school.name,classroom.name,"Absent")
+        }
+      })
 
       return await newAttendance.save();
     } catch (err) {
