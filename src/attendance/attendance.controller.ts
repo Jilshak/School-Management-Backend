@@ -379,7 +379,6 @@ export class AttendanceController {
     @LoginUser('userId') studentId: Types.ObjectId,
     @LoginUser('classId') classId: Types.ObjectId,
   ) {
-    console.log(createRegularizationDto, 'this is the regularization data');
     return this.attendanceService.createRegularizationRequest(
       createRegularizationDto,
       studentId,
@@ -528,5 +527,23 @@ export class AttendanceController {
       approvalData.type,
       teacherId,
     );
+  }
+
+  @Get('/classroom/:classId/date/:date')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Get attendance details for a classroom on a specific date' })
+  @ApiParam({ name: 'classId', type: 'string', description: 'ID of the class' })
+  @ApiParam({ name: 'date', type: 'string', description: 'Date in YYYY-MM-DD format' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns attendance details for the specified classroom and date.',
+  })
+  @ApiResponse({ status: 404, description: 'Class not found or no attendance records for the specified date.' })
+  getClassroomAttendanceByDate(
+    @Param('classId') classId: string,
+    @Param('date') date: string,
+    @LoginUser('schoolId') schoolId: Types.ObjectId,
+  ) {
+    return this.attendanceService.getClassroomAttendanceByDate(classId, date, schoolId);
   }
 }

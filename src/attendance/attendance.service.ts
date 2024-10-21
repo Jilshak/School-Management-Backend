@@ -939,4 +939,65 @@ export class AttendanceService {
       );
     }
   }
+
+  async getClassroomAttendanceByDate(
+    classId: string,
+    date: string,
+    schoolId: Types.ObjectId
+  ): Promise<any> {
+    try {
+      const attendanceDate = new Date(date);
+      attendanceDate.setUTCHours(0, 0, 0, 0);
+      const nextDay = new Date(attendanceDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+
+      const attendanceRecord = await this.attendanceModel.aggregate([
+        {
+          $match: {
+            classId: new Types.ObjectId(classId),
+            schoolId: schoolId,
+            attendanceDate: { $gte: attendanceDate, $lt: nextDay },
+          },
+        },
+        { $unwind: '$studentsAttendance' },
+        {
+          $lookup: {
+            from: 'students',
+            localField: 'studentsAttendance.studentId',
+            foreignField: 'userId',
+            as: 'studentDetails',
+          },
+        },
+        { $unwind: '$studentDetails' },
+        {
+          $project: {
+            _id: 0,
+            studentId: '$studentsAttendance.studentId',
+            firstName: '$studentDetails.firstName',
+            lastName: '$studentDetails.lastName',
+            enrollmentNumber: '$studentDetails.enrollmentNumber',
+            status: '$studentsAttendance.status',
+            remark: '$studentsAttendance.remark',
+            isRegularized: '$studentsAttendance.isRegularized',
+          },
+        },
+      ]);
+
+      if (!attendanceRecord || attendanceRecord.length === 0) {
+        throw new NotFoundException('No attendance record found for the specified date and class');
+      }
+
+      return {
+        date: attendanceDate,
+        classId: classId,
+        attendance: attendanceRecord,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error('Error fetching classroom attendance:', error);
+      throw new InternalServerErrorException('Failed to fetch classroom attendance');
+    }
+  }
 }

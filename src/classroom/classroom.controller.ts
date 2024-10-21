@@ -1,12 +1,6 @@
 import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, ValidationPipe, Query } from '@nestjs/common';
 import { ClassroomService } from './classroom.service';
 import { CreateClassroomDto } from './dto/create-classroom.dto';
-import { UpdateClassroomDto } from './dto/update-classroom.dto';
-import { CreateSubjectDto } from './dto/create-subject.dto';
-import { CreateTimeTableDto } from './dto/create-time-table.dto';
-import { CreateAttendanceDto } from './dto/create-attendance.dto';
-import { CreateSyllabusDto } from './dto/create-syllabus.dto';
-import { CreateStudyMaterialDto } from './dto/create-study-material.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../shared/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
