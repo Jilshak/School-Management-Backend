@@ -443,6 +443,7 @@ export class ExamService {
         {
           $match: {
             schoolId: new Types.ObjectId(schoolId),
+            classId: new Types.ObjectId(classId)
           },
         },
         {
