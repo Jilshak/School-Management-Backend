@@ -1,6 +1,6 @@
-import { Injectable, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types, Connection } from 'mongoose';
+import { Connection, Model, Types } from 'mongoose';
 import { WorkDoneBook } from '../domains/schema/workdonebook.schema';
 import { ClassDailyRecord } from '../domains/schema/classDailyRecord.schema';
 import { CreateWorkDoneBookDto } from './dto/create-workdonebook.dto';
@@ -76,7 +76,6 @@ export class WorkDoneBookService {
 
       const workDoneBookResult = await this.workDoneBookModel.findOneAndUpdate(workDoneBookFilter, workDoneBookUpdate, workDoneBookOptions);
 
-      // Update ClassDailyRecord for each classroom
       for (const dto of flattenedDtos) {
         const classDailyRecordFilter = {
           date: date,
@@ -84,21 +83,66 @@ export class WorkDoneBookService {
           schoolId: schoolId,
         };
 
-        const classDailyRecordUpdate = {
-          $addToSet: {
-            entries: {
-              teacherId: new Types.ObjectId(teacherId),
-              subjectId: new Types.ObjectId(dto.subjectId),
-              topics: dto.topics,
-              activities: dto.activities,
-              homework: dto.homework,
+        const existingRecord = await this.classDailyRecordModel.findOne({
+          ...classDailyRecordFilter,
+          'entries.teacherId': new Types.ObjectId(teacherId),
+          'entries.subjectId': new Types.ObjectId(dto.subjectId),
+        });
+
+        let classDailyRecordUpdate;
+        let classDailyRecordOptions;
+
+        if (existingRecord) {
+          // Update existing entry
+          classDailyRecordUpdate = {
+            $set: {
+              'entries.$[elem].topics': dto.topics,
+              'entries.$[elem].activities': dto.activities,
+              'entries.$[elem].homework': dto.homework,
             },
-          },
-        };
+          };
 
-        const classDailyRecordOptions = { upsert: true, new: true, session };
+          classDailyRecordOptions = {
+            arrayFilters: [
+              {
+                'elem.teacherId': new Types.ObjectId(teacherId),
+                'elem.subjectId': new Types.ObjectId(dto.subjectId),
+              },
+            ],
+            new: true,
+            session,
+          };
+        } else {
+          // Add new entry
+          classDailyRecordUpdate = {
+            $push: {
+              entries: {
+                teacherId: new Types.ObjectId(teacherId),
+                subjectId: new Types.ObjectId(dto.subjectId),
+                topics: dto.topics,
+                activities: dto.activities,
+                homework: dto.homework,
+              },
+            },
+            $setOnInsert: {
+              date: date,
+              classroomId: new Types.ObjectId(dto.classroomId),
+              schoolId: schoolId,
+            },
+          };
 
-        await this.classDailyRecordModel.findOneAndUpdate(classDailyRecordFilter, classDailyRecordUpdate, classDailyRecordOptions);
+          classDailyRecordOptions = {
+            upsert: true,
+            new: true,
+            session,
+          };
+        }
+
+        await this.classDailyRecordModel.findOneAndUpdate(
+          classDailyRecordFilter,
+          classDailyRecordUpdate,
+          classDailyRecordOptions
+        );
       }
 
       if (supportsTransactions && session) {
@@ -115,6 +159,159 @@ export class WorkDoneBookService {
       }
       console.error('Error in upsert:', error);
       throw new InternalServerErrorException('Failed to create or update work done book entry');
+    } finally {
+      if (session) {
+        await session.endSession();
+      }
+    }
+  }
+
+  async getDailyWorkDoneBooks(dateString: string | undefined, userId: Types.ObjectId, schoolId: Types.ObjectId, roles?: string[]) {
+    let session = null;
+    try {
+      const supportsTransactions = await this.supportsTransactions();
+
+      if (supportsTransactions) {
+        session = await this.connection.startSession();
+        session.startTransaction();
+      }
+
+      let date: Date;
+      if (dateString) {
+        date = new Date(dateString);
+        if (isNaN(date.getTime())) {
+          throw new BadRequestException('Invalid date format. Please use YYYY-MM-DD.');
+        }
+      } else {
+        date = new Date();
+        date.setUTCHours(0, 0, 0, 0);
+      }
+
+      const isAdmin = roles?.includes('admin');
+
+      const pipeline = [
+        {
+          $match: {
+            date: date,
+            schoolId: schoolId,
+            ...(isAdmin ? {} : { teacherId: userId })
+          }
+        },
+        {
+          $lookup: {
+            from: 'staffs',
+            localField: 'teacherId',
+            foreignField: 'userId',
+            as: 'teacherInfo'
+          }
+        },
+        { $unwind: '$teacherInfo' },
+        {
+          $lookup: {
+            from: 'classrooms',
+            localField: 'entries.classroomId',
+            foreignField: '_id',
+            as: 'classroomInfo'
+          }
+        },
+        {
+          $lookup: {
+            from: 'subjects',
+            localField: 'entries.subjectId',
+            foreignField: '_id',
+            as: 'subjectInfo'
+          }
+        },
+        {
+          $addFields: {
+            entries: {
+              $map: {
+                input: '$entries',
+                as: 'entry',
+                in: {
+                  $mergeObjects: [
+                    '$$entry',
+                    {
+                      classroom: {
+                        $arrayElemAt: [
+                          {
+                            $filter: {
+                              input: '$classroomInfo',
+                              as: 'classroom',
+                              cond: { $eq: ['$$classroom._id', '$$entry.classroomId'] }
+                            }
+                          },
+                          0
+                        ]
+                      },
+                      subject: {
+                        $arrayElemAt: [
+                          {
+                            $filter: {
+                              input: '$subjectInfo',
+                              as: 'subject',
+                              cond: { $eq: ['$$subject._id', '$$entry.subjectId'] }
+                            }
+                          },
+                          0
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          $project: {
+            _id: 1,
+            date: 1,
+            schoolId: 1,
+            teacherId: 1,
+            teacherName: {
+              $concat: ['$teacherInfo.firstName', ' ', '$teacherInfo.lastName']
+            },
+            entries: {
+              $map: {
+                input: '$entries',
+                as: 'entry',
+                in: {
+                  _id: '$$entry._id',
+                  classroomId: '$$entry.classroomId',
+                  classroomName: '$$entry.classroom.name',
+                  subjectId: '$$entry.subjectId',
+                  subjectName: '$$entry.subject.name',
+                  topics: '$$entry.topics',
+                  activities: '$$entry.activities',
+                  homework: '$$entry.homework'
+                }
+              }
+            }
+          }
+        }
+      ];
+
+      const workDoneBooks = await this.workDoneBookModel.aggregate(pipeline).session(session);
+
+      if (workDoneBooks.length === 0) {
+        throw new NotFoundException('No work done book entry found for the specified date.');
+      }
+
+      if (supportsTransactions && session) {
+        await session.commitTransaction();
+      }
+
+      return workDoneBooks;
+    } catch (error) {
+      if (session) {
+        await session.abortTransaction();
+      }
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error('Error in getDailyWorkDoneBooks:', error);
+      throw new InternalServerErrorException('Failed to retrieve daily work done book entry');
     } finally {
       if (session) {
         await session.endSession();

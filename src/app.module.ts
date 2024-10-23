@@ -40,6 +40,7 @@ import { Payroll, PayrollSchema } from './domains/schema/payroll.schema';
 import { SyllabusModule } from './syllabus/syllabus.module';
 import { MCQModule } from './mcq/mcq.module';
 import { WorkDoneBookModule } from './workdonebook/workdonebook.module';
+import { ClassDailyRecordModule } from './classdailyrecord/classdailyrecord.module';
 
 @Module({
   imports: [
@@ -89,6 +90,7 @@ import { WorkDoneBookModule } from './workdonebook/workdonebook.module';
     SyllabusModule,
     MCQModule,
     WorkDoneBookModule,
+    ClassDailyRecordModule,
   ],
   providers:[PaymentDueCron, NotificationService, WhatsAppService,SalaryDueCron],
   controllers: []

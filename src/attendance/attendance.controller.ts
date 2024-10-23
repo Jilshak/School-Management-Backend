@@ -106,6 +106,22 @@ export class AttendanceController {
     return this.attendanceService.findOne(studentId, schoolId, month, year);
   }
 
+  @Get('/get-percentage')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.STUDENT)
+  @ApiOperation({ summary: 'Get attendance percentage for a student in a class' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns the attendance percentage for the specified student in the given class.',
+  })
+  @ApiResponse({ status: 404, description: 'Student or class not found.' })
+  getAttendancePercentage(
+    @LoginUser('userId') studentId: string,
+    @LoginUser('schoolId') schoolId: string,
+  ) {
+    console.log(studentId, schoolId, 'studentId, schoolId');
+    return this.attendanceService.getAttendancePercentage(studentId, schoolId);
+  }
+
   @Get(':classId')
   @ApiOperation({ summary: 'Get all attendance records for a class' })
   @ApiParam({ name: 'classId', type: 'string', description: 'ID of the class' })

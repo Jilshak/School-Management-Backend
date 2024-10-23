@@ -1000,4 +1000,124 @@ export class AttendanceService {
       throw new InternalServerErrorException('Failed to fetch classroom attendance');
     }
   }
+
+  async getAttendancePercentage(
+    studentId: string,
+    schoolId: string
+  ): Promise<{
+    percentage: number;
+    totalDays: number;
+    presentDays: number;
+    absentDays: number;
+    streak: number;
+    monthlyBreakdown: Array<{
+      month: string;
+      percentage: number;
+      totalDays: number;
+      presentDays: number;
+    }>;
+  }> {
+    try {
+      const currentDate = new Date();
+      const oneYearAgo = new Date(currentDate);
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+      const attendanceRecords = await this.attendanceModel.aggregate([
+        {
+          $match: {
+            schoolId: new Types.ObjectId(schoolId),
+            attendanceDate: { $gte: oneYearAgo, $lte: currentDate },
+          },
+        },
+        { $unwind: '$studentsAttendance' },
+        {
+          $match: {
+            'studentsAttendance.studentId': new Types.ObjectId(studentId),
+          },
+        },
+        {
+          $sort: { attendanceDate: 1 },
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$attendanceDate' },
+              month: { $month: '$attendanceDate' },
+            },
+            totalDays: { $sum: 1 },
+            presentDays: {
+              $sum: {
+                $cond: [
+                  { $in: ['$studentsAttendance.status', ['present', 'halfday']] },
+                  1,
+                  0,
+                ],
+              },
+            },
+            statuses: { $push: '$studentsAttendance.status' },
+          },
+        },
+        {
+          $sort: { '_id.year': 1, '_id.month': 1 },
+        },
+      ]);
+
+      if (attendanceRecords.length === 0) {
+        return {
+          percentage: 0,
+          totalDays: 0,
+          presentDays: 0,
+          absentDays: 0,
+          streak: 0,
+          monthlyBreakdown: [],
+        };
+      }
+
+      let totalDays = 0;
+      let totalPresentDays = 0;
+      let streak = 0;
+      let currentStreak = 0;
+      const monthlyBreakdown = [];
+
+      attendanceRecords.forEach((record) => {
+        totalDays += record.totalDays;
+        totalPresentDays += record.presentDays;
+
+        const monthPercentage = (record.presentDays / record.totalDays) * 100;
+        monthlyBreakdown.push({
+          month: `${record._id.year}-${String(record._id.month).padStart(2, '0')}`,
+          percentage: Number(monthPercentage.toFixed(2)),
+          totalDays: record.totalDays,
+          presentDays: record.presentDays,
+        });
+
+        // Calculate streak
+        record.statuses.forEach((status) => {
+          if (status === 'present' || status === 'halfday') {
+            currentStreak++;
+            if (currentStreak > streak) {
+              streak = currentStreak;
+            }
+          } else {
+            currentStreak = 0;
+          }
+        });
+      });
+
+      const percentage = (totalPresentDays / totalDays) * 100;
+      const absentDays = totalDays - totalPresentDays;
+
+      return {
+        percentage: Number(percentage.toFixed(2)),
+        totalDays,
+        presentDays: totalPresentDays,
+        absentDays,
+        streak,
+        monthlyBreakdown,
+      };
+    } catch (error) {
+      console.error('Error calculating attendance percentage:', error);
+      throw new InternalServerErrorException('Failed to calculate attendance percentage');
+    }
+  }
 }
