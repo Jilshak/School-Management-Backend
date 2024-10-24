@@ -36,5 +36,7 @@ jobs:
           password: ${{ secrets.DO_SERVER_PASSWORD }}
           port: 22
           script: |
+             cd ~/production/School-Management-Nest-Backend
+             ls
              systemctl restart nginx
           debug: true  # Enable debugging to capture more information
