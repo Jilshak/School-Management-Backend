@@ -37,6 +37,8 @@ jobs:
           port: 22
           script: |
              cd ~/production/School-Management-Nest-Backend
-             ls
+             npm i
+             npm run build
+             pm2 restart all
              systemctl restart nginx
           debug: true  # Enable debugging to capture more information
