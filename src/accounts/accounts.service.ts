@@ -2010,7 +2010,7 @@ export class AccountsService {
             fee.feeTypeId = feeTypeTemp
               .map((feeType) => {
                 return feeType.feeDetails.find(
-                  (a) => a._id.toString() === fee.duePaymentId.toString(),
+                  (a) => a?._id?.toString() === fee?.duePaymentId?.toString(),
                 )?.feeType;
               })
               .filter((a) => a)[0];
@@ -2024,15 +2024,15 @@ export class AccountsService {
       accounts.forEach((account) => {
         account.fees.forEach((fee) => {
           const feeTypeName = feeType.find(
-            (feeType) => feeType._id.toString() === fee.feeTypeId.toString(),
+            (feeType) => feeType?._id?.toString() === fee?.feeTypeId?.toString(),
           ).name;
           if (income.has(feeTypeName)) {
             const temp = income.get(feeTypeName);
-            temp.amount += fee.amount;
+            temp.amount += (fee.amount* (fee?.quantity || 1));
             income.set(feeTypeName, temp);
           } else {
             income.set(feeTypeName, {
-              amount: fee.amount,
+              amount: (fee.amount* (fee?.quantity || 1)),
               description: 'income',
             });
           }
@@ -2226,28 +2226,24 @@ export class AccountsService {
 
       let accounts = await this.accountModel.aggregate([
         { $match: accountMatchStage },
-        { $unwind: '$fees' },
-        {
-          $lookup: {
-            from: 'feetypes',
-            localField: 'fees.feeTypeId',
-            foreignField: '_id',
-            as: 'feeType',
-          },
-        },
-        { $unwind: '$feeType' },
-        {
-          $project: {
-            description: '$feeType.name',
-            amount: '$fees.amount',
-            date: '$paymentDate',
-            category: '$feeType.name',
-            createdAt: 1,
-            updatedAt: 1,
-            type: { $literal: 'income' },
-          },
-        },
       ]);
+
+      const feeType = await this.feeModel.find({ schoolId }).exec();
+      accounts = accounts.map((account) => {
+       return account.fees.map((fee)=>{
+        return {
+          description: fee?.name,
+              amount: fee?.amount*(fee?.quantity || 1),
+              date: account?.paymentDate || account?.createdAt,
+              category: feeType.find(
+                (feeType) => feeType?._id?.toString() === fee?.feeTypeId?.toString(),
+              )?.name || fee?.name,
+              createdAt: account.createdAt,
+              updatedAt: account.updatedAt,
+              type: "income",
+        }
+       })
+      }).flatMap((a)=>a)
 
       let data = [...expenses, ...accounts];
 
