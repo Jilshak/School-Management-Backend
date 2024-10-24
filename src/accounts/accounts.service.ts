@@ -1457,21 +1457,29 @@ export class AccountsService {
           $group: {
             _id: '$fees.duePaymentId',
             totalPaid: { $sum: '$fees.amount' },
+            paymentHistory: {
+              $push: {
+                amount: '$fees.amount',
+                paymentDate: '$paymentDate',
+                paymentMode: '$paymentMode',
+              },
+            },
           },
         },
       ]);
 
       const calculateBalance = paymentDue.map((dues) => {
         const balanceDues = dues.feeDetails.map((fee) => {
-          const paidAmount =
-            accounts.find(
-              (account) => account._id.toString() === fee._id.toString(),
-            )?.totalPaid || 0;
+          const accountInfo = accounts.find(
+            (account) => account._id.toString() === fee._id.toString(),
+          );
+          const paidAmount = accountInfo?.totalPaid || 0;
           const remainingBalance = fee.amount * fee.count - paidAmount;
           return {
             ...fee,
             paidAmount,
             remainingBalance,
+            paymentHistory: accountInfo?.paymentHistory || [],
           };
         });
 
