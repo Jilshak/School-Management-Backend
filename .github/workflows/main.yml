@@ -37,6 +37,7 @@ jobs:
           port: 22
           script: |
              cd ~/production/School-Management-Nest-Backend
+             git pull origin main
              npm i
              npm run build
              pm2 restart all
