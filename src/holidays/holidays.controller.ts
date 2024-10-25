@@ -26,7 +26,7 @@ export class HolidaysController {
   }
 
   @Get()
-  @Roles('admin')
+  @Roles()
   @ApiOperation({ summary: 'Get all holidays' })
   @ApiResponse({ status: 200, description: 'Return all holidays.', type: [Holiday] })
   @ApiQuery({ name: 'startDate', required: false, type: Date })
@@ -50,7 +50,7 @@ export class HolidaysController {
   }
 
   @Get('weekly')
-  @Roles('admin')
+  @Roles()
   @ApiOperation({ summary: 'Get weekly holidays for a school' })
   @ApiResponse({ status: 200, description: 'Returns an array of day numbers representing weekly holidays', type: [Number] })
   getWeeklyHolidays(@LoginUser('schoolId') schoolId: string): Promise<number[]> {
@@ -70,7 +70,7 @@ export class HolidaysController {
   }
 
   @Get(':id')
-  @Roles('admin')
+  @Roles()
   @ApiOperation({ summary: 'Get a holiday by id' })
   @ApiResponse({ status: 200, description: 'Return the holiday.', type: Holiday })
   @ApiResponse({ status: 404, description: 'Holiday not found.' })
