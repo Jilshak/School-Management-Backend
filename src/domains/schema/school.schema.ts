@@ -44,6 +44,9 @@ export class School extends Document {
   @Prop({required: true})
   schoolLogo: string;
 
+  @ApiProperty({ example: [0, 6], description: 'Array of day numbers (0-6) representing weekly holidays' })
+  @Prop({ type: [Number], default: [0], validate: [(val: number[]) => val.every((num: number) => num >= 0 && num <= 6)] })
+  weeklyHolidays: number[];
 }
 
 export const SchoolSchema = SchemaFactory.createForClass(School);

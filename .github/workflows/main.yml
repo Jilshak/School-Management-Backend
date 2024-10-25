@@ -28,19 +28,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-  
-      - name: Execute SSH Commands on the Server
+      - name: Restart Nginx
         uses: appleboy/ssh-action@v0.1.3
         with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SERVER_USER }}
+          host: ${{ secrets.DO_SERVER_IP }}
+          username: ${{ secrets.DO_SERVER_USER }}
           password: ${{ secrets.DO_SERVER_PASSWORD }}
-          port: 22  # Adjust if needed
+          port: 22
           script: |
-            cd ~/production/School-Management-Nest-Backend
-            git pull origin main
-            npm install
-            npm run build
-            pm2 restart all
-            systemctl restart nginx
-
+             cd ~/production/School-Management-Nest-Backend
+             git pull origin main
+             npm i
+             npm run build
+             pm2 restart all
+             systemctl restart nginx
+          debug: true  # Enable debugging to capture more information

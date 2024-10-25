@@ -41,6 +41,7 @@ import { SyllabusModule } from './syllabus/syllabus.module';
 import { MCQModule } from './mcq/mcq.module';
 import { WorkDoneBookModule } from './workdonebook/workdonebook.module';
 import { ClassDailyRecordModule } from './classdailyrecord/classdailyrecord.module';
+import { HolidaysModule } from './holidays/holidays.module';
 
 @Module({
   imports: [
@@ -91,6 +92,7 @@ import { ClassDailyRecordModule } from './classdailyrecord/classdailyrecord.modu
     MCQModule,
     WorkDoneBookModule,
     ClassDailyRecordModule,
+    HolidaysModule,
   ],
   providers:[PaymentDueCron, NotificationService, WhatsAppService,SalaryDueCron],
   controllers: []
