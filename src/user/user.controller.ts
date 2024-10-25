@@ -65,6 +65,19 @@ export class UserController {
     }
   }
 
+  @Get('check-username/:username')
+  async checkUsernameAvailability(@Param('username') username: string) {
+    if (username.length < 3) {
+      return { available: false, valid: false, message: 'Username must be at least 3 characters long' };
+    }
+    const isAvailable = await this.userService.isUsernameAvailable(username);
+    return { 
+      available: isAvailable, 
+      valid: true,
+      message: isAvailable ? 'Username is available' : 'Username is not available'
+    };
+  }
+
   @Get()
   @Roles(UserRole.ADMIN, UserRole.HR)
   @ApiOperation({ summary: 'Get all users' })
