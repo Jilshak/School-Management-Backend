@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { Classroom } from './classroom.schema';
 
 export type HolidayDocument = Holiday & Document;
 
@@ -19,6 +20,9 @@ export class Holiday {
 
   @Prop({ type: Types.ObjectId, ref: 'School',required:true,immutable:true })
   schoolId: Types.ObjectId;
+
+  @Prop({type:Types.ObjectId,ref:Classroom.name})
+  exceptionClassrooms: Types.ObjectId[];
 
   @Prop({ default: true })
   isActive: boolean;

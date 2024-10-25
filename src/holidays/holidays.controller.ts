@@ -33,11 +33,20 @@ export class HolidaysController {
   @ApiQuery({ name: 'endDate', required: false, type: Date })
   findAll(
     @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string
-  ): Promise<Holiday[]> {
+    @Query('endDate') endDate?: string,
+    @LoginUser('schoolId') schoolId?: Types.ObjectId
+  ): Promise<any[]> {
     const start = startDate ? new Date(startDate) : undefined;
     const end = endDate ? new Date(endDate) : undefined;
-    return this.holidaysService.findAll(start, end);
+    return this.holidaysService.findAll(start, end, schoolId);
+  }
+
+  @Patch('exception/:id')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Get exception holidays for a school' })
+  @ApiResponse({ status: 200, description: 'Edit an array of exception holidays for classes'})
+  updateExceptionHolidays(@LoginUser('schoolId') schoolId: Types.ObjectId,@Param('id') id: string,@Body() exceptionClassrooms: Types.ObjectId[]) {
+    return this.holidaysService.updateExceptionHolidays(schoolId,id,exceptionClassrooms);
   }
 
   @Get('weekly')
