@@ -42,6 +42,7 @@ import { MCQModule } from './mcq/mcq.module';
 import { WorkDoneBookModule } from './workdonebook/workdonebook.module';
 import { ClassDailyRecordModule } from './classdailyrecord/classdailyrecord.module';
 import { HolidaysModule } from './holidays/holidays.module';
+import { IsHaveFileAccessModule } from './is-have-file-access/is-have-file-access.module';
 
 @Module({
   imports: [
@@ -93,6 +94,7 @@ import { HolidaysModule } from './holidays/holidays.module';
     WorkDoneBookModule,
     ClassDailyRecordModule,
     HolidaysModule,
+    IsHaveFileAccessModule,
   ],
   providers:[PaymentDueCron, NotificationService, WhatsAppService,SalaryDueCron],
   controllers: []
