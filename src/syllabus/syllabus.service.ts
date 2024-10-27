@@ -24,14 +24,8 @@ export class SyllabusService {
             const chapters = await Promise.all(
               subject.chapters.map(async (chapter) => {
                 const chapterId = new Types.ObjectId();
-                const filePath = await this.uploadChapterPdf(
-                  chapter.pdf,
-                  schoolId.toString(),
-                  syllabusId.toString(),
-                  subject.subject.toString(),
-                  chapterId.toString(),
-                );
-                return { _id: chapterId, chapterName: chapter.name, filePath };
+               
+                return { _id: chapterId, chapterName: chapter.name, filePath:chapter.pdf };
               }),
             );
             return { subjectId: new Types.ObjectId(subject.subject), chapters };
@@ -314,17 +308,7 @@ export class SyllabusService {
         updateSyllabusDto.subjects.map(async (subject) => {
           const chapters = await Promise.all(
             subject.chapters.map(async (chapter) => {
-              let filePath = chapter.filePath;
-              if (chapter.pdf) {
-                const chapterId = new Types.ObjectId(chapter._id);
-                filePath = await this.uploadChapterPdf(
-                  chapter.pdf,
-                  schoolId.toString(),
-                  syllabus._id.toString(),
-                  subject.subject.toString(),
-                  chapterId.toString(),
-                );
-              }
+              let filePath = chapter.filePath || chapter.pdf;
               return {
                 _id: new Types.ObjectId(chapter._id),
                 chapterName: chapter.name,

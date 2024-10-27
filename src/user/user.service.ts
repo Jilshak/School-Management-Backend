@@ -19,10 +19,12 @@ import { CustomError } from '../common/errors/custom-error';
 import { HttpStatus } from '@nestjs/common';
 import { WhatsAppService } from 'src/notification/whatsapp.service';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class UserService {
   constructor(
+    private configService: ConfigService,
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Student.name) private studentModel: Model<Student>,
     @InjectModel(Staff.name) private staffModel: Model<Staff>,
@@ -93,7 +95,7 @@ export class UserService {
   async create(
     createUserDto: CreateUserDto,
     schoolId?: Types.ObjectId,
-  ): Promise<string> {
+  ){
     let session: ClientSession | null = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -113,7 +115,6 @@ export class UserService {
         );
       }
      
-
       // Handle STUDENT role
       if (createUserDto.roles.includes(UserRole.STUDENT)) {
         createUserDto.roles = [UserRole.STUDENT];
@@ -153,7 +154,21 @@ export class UserService {
       });
 
       const savedUser = await createdUser.save({ session });
-
+      if(createUserDto.profilePhoto){
+        createUserDto.profilePhoto = `${this.configService.get<string>('UPLOAD_URL')}/${schoolId}/users/${savedUser._id}/profile.${createUserDto.profilePhoto}`
+      }
+      if(createUserDto.adhaarDocument){
+        createUserDto.adhaarDocument = `${this.configService.get<string>('UPLOAD_URL')}/${schoolId}/users/${savedUser._id}/adhaar.${createUserDto.adhaarDocument}`
+      }
+      if(createUserDto.pancardDocument){
+        createUserDto.pancardDocument = `${this.configService.get<string>('UPLOAD_URL')}/${schoolId}/users/${savedUser._id}/pancard.${createUserDto.pancardDocument}`
+      }
+      if(createUserDto.tcDocument){
+        createUserDto.tcDocument = `${this.configService.get<string>('UPLOAD_URL')}/${schoolId}/users/${savedUser._id}/tc.${createUserDto.tcDocument}`
+      }
+      if(createUserDto.birthCertificateDocument){
+        createUserDto.birthCertificateDocument = `${this.configService.get<string>('UPLOAD_URL')}/${schoolId}/users/${savedUser._id}/birthCertificate.${createUserDto.birthCertificateDocument}`
+      }
       // Create role-specific documents
       if (!savedUser.roles.includes(UserRole.STUDENT)) {
         await this.createStaffDocument(savedUser, createUserDto, session);
@@ -172,7 +187,7 @@ export class UserService {
       // Send WhatsApp messages with username and password
       await this.sendCredentialsViaWhatsApp(createUserDto, username, password);
 
-      return 'User Created';
+      return savedUser;
     } catch (error) {
       if (session) {
         await session.abortTransaction();

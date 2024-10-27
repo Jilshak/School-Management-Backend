@@ -59,7 +59,7 @@ export class UserController {
   ) {
     try {
       const res = await this.userService.create(createUserDto, schoolId);
-      return { status: 201, description: res };
+      return { status: 201, user: res };
     } catch (error) {
       throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
     }
