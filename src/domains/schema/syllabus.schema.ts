@@ -5,11 +5,17 @@ import { Document, Types } from 'mongoose';
 class Chapter {
 
 
-  @Prop({ required: true })
+  @Prop({ required: true,type:String })
   chapterName: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true,type:String })
   filePath: string;
+
+  @Prop({ required: false,type:String })
+  description: string;
+
+  @Prop({ required: false,type:Number })
+  hours: number;
 }
 
 @Schema()
@@ -23,7 +29,7 @@ class Subject {
 
 @Schema({ timestamps: true })
 export class Syllabus extends Document {
-  @Prop({ required: true })
+  @Prop({ required: true,type:String })
   syllabusName: string;
 
   @Prop({ type: [Subject], required: true })

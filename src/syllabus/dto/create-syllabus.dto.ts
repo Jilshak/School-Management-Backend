@@ -1,4 +1,4 @@
-import { IsString, IsArray, IsNotEmpty, ValidateNested, IsBase64 } from 'class-validator';
+import { IsString, IsArray, IsNotEmpty, ValidateNested, IsBase64, IsOptional, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -11,6 +11,16 @@ class ChapterDto {
     @ApiProperty({ description: 'Base64 encoded PDF file for the chapter' })
     @IsBase64()
     pdf: string; // Base64 encoded PDF file
+
+    @ApiProperty({ description: 'Description of the chapter' })
+    @IsString()
+    @IsOptional()
+    description: string;
+
+    @ApiProperty({ description: 'Hours of the chapter' })
+    @IsNumber()
+    @IsOptional()
+    hours: number;
 }
 
 class SubjectDto {

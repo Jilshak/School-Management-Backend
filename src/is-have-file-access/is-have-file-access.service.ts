@@ -27,7 +27,7 @@ export class IsHaveFileAccessService {
     } else if (
       (splitFileLocation[1] === 'syllabus' &&
         details.roles.includes(UserRole.SUPERADMIN)) ||
-      details.roles.includes(UserRole.ADMIN)
+      details.roles.includes(UserRole.ADMIN) || details.roles.includes(UserRole.TEACHER)
     ) {
       return schoolId;
     }

@@ -6,10 +6,12 @@ import fs from 'fs';
 import { Model, Types } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { Syllabus } from 'src/domains/schema/syllabus.schema';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class SyllabusService {
   constructor(
+    private configService: ConfigService,
     @InjectModel(Syllabus.name) private syllabusModel: Model<Syllabus>,
   ) {}
 
@@ -24,8 +26,14 @@ export class SyllabusService {
             const chapters = await Promise.all(
               subject.chapters.map(async (chapter) => {
                 const chapterId = new Types.ObjectId();
-               
-                return { _id: chapterId, chapterName: chapter.name, filePath:chapter.pdf };
+
+                return {
+                  _id: chapterId,
+                  chapterName: chapter.name,
+                  filePath: `${this.configService.get('UPLOAD_URL')}/${schoolId}/syllabus/${syllabusId}/${subject.subject}/${chapterId}.${chapter.pdf}`,
+                  description: chapter.description,
+                  hours: chapter.hours
+                };
               }),
             );
             return { subjectId: new Types.ObjectId(subject.subject), chapters };
@@ -53,16 +61,16 @@ export class SyllabusService {
             from: 'subjects',
             localField: 'subjects.subjectId',
             foreignField: '_id',
-            as: 'subjectDetails'
-          }
+            as: 'subjectDetails',
+          },
         },
         {
           $lookup: {
             from: 'classrooms',
             localField: 'assignedClasses',
             foreignField: '_id',
-            as: 'classDetails'
-          }
+            as: 'classDetails',
+          },
         },
         {
           $project: {
@@ -83,18 +91,20 @@ export class SyllabusService {
                             $filter: {
                               input: '$subjectDetails',
                               as: 'sd',
-                              cond: { $eq: ['$$sd._id', '$$subject.subjectId'] }
-                            }
+                              cond: {
+                                $eq: ['$$sd._id', '$$subject.subjectId'],
+                              },
+                            },
                           },
                           as: 'filteredSubject',
-                          in: '$$filteredSubject.name'
-                        }
+                          in: '$$filteredSubject.name',
+                        },
                       },
-                      0
-                    ]
-                  }
-                }
-              }
+                      0,
+                    ],
+                  },
+                },
+              },
             },
             assignedClasses: {
               $map: {
@@ -102,18 +112,18 @@ export class SyllabusService {
                 as: 'class',
                 in: {
                   _id: '$$class._id',
-                  name: '$$class.name'
-                }
-              }
+                  name: '$$class.name',
+                },
+              },
             },
             schoolId: 1,
             isActive: 1,
             createdBy: 1,
             updatedBy: 1,
             createdAt: 1,
-            updatedAt: 1
-          }
-        }
+            updatedAt: 1,
+          },
+        },
       ])
       .exec();
 
@@ -131,16 +141,16 @@ export class SyllabusService {
             from: 'subjects',
             localField: 'subjects.subjectId',
             foreignField: '_id',
-            as: 'subjectDetails'
-          }
+            as: 'subjectDetails',
+          },
         },
         {
           $lookup: {
             from: 'classrooms',
             localField: 'assignedClasses',
             foreignField: '_id',
-            as: 'classDetails'
-          }
+            as: 'classDetails',
+          },
         },
         {
           $project: {
@@ -161,18 +171,20 @@ export class SyllabusService {
                             $filter: {
                               input: '$subjectDetails',
                               as: 'sd',
-                              cond: { $eq: ['$$sd._id', '$$subject.subjectId'] }
-                            }
+                              cond: {
+                                $eq: ['$$sd._id', '$$subject.subjectId'],
+                              },
+                            },
                           },
                           as: 'filteredSubject',
-                          in: '$$filteredSubject.name'
-                        }
+                          in: '$$filteredSubject.name',
+                        },
                       },
-                      0
-                    ]
-                  }
-                }
-              }
+                      0,
+                    ],
+                  },
+                },
+              },
             },
             assignedClasses: {
               $map: {
@@ -180,18 +192,18 @@ export class SyllabusService {
                 as: 'class',
                 in: {
                   _id: '$$class._id',
-                  name: '$$class.name'
-                }
-              }
+                  name: '$$class.name',
+                },
+              },
             },
             schoolId: 1,
             isActive: 1,
             createdBy: 1,
             updatedBy: 1,
             createdAt: 1,
-            updatedAt: 1
-          }
-        }
+            updatedAt: 1,
+          },
+        },
       ])
       .exec();
 
@@ -201,7 +213,10 @@ export class SyllabusService {
     return syllabus[0];
   }
 
-  async findOneForStudent(classId: string | Types.ObjectId, schoolId: Types.ObjectId) {
+  async findOneForStudent(
+    classId: string | Types.ObjectId,
+    schoolId: Types.ObjectId,
+  ) {
     const syllabus = await this.syllabusModel
       .aggregate([
         { $match: { assignedClasses: new Types.ObjectId(classId), schoolId } },
@@ -210,16 +225,16 @@ export class SyllabusService {
             from: 'subjects',
             localField: 'subjects.subjectId',
             foreignField: '_id',
-            as: 'subjectDetails'
-          }
+            as: 'subjectDetails',
+          },
         },
         {
           $lookup: {
             from: 'classrooms',
             localField: 'assignedClasses',
             foreignField: '_id',
-            as: 'classDetails'
-          }
+            as: 'classDetails',
+          },
         },
         {
           $project: {
@@ -240,18 +255,20 @@ export class SyllabusService {
                             $filter: {
                               input: '$subjectDetails',
                               as: 'sd',
-                              cond: { $eq: ['$$sd._id', '$$subject.subjectId'] }
-                            }
+                              cond: {
+                                $eq: ['$$sd._id', '$$subject.subjectId'],
+                              },
+                            },
                           },
                           as: 'filteredSubject',
-                          in: '$$filteredSubject.name'
-                        }
+                          in: '$$filteredSubject.name',
+                        },
                       },
-                      0
-                    ]
-                  }
-                }
-              }
+                      0,
+                    ],
+                  },
+                },
+              },
             },
             assignedClasses: {
               $map: {
@@ -259,18 +276,18 @@ export class SyllabusService {
                 as: 'class',
                 in: {
                   _id: '$$class._id',
-                  name: '$$class.name'
-                }
-              }
+                  name: '$$class.name',
+                },
+              },
             },
             schoolId: 1,
             isActive: 1,
             createdBy: 1,
             updatedBy: 1,
             createdAt: 1,
-            updatedAt: 1
-          }
-        }
+            updatedAt: 1,
+          },
+        },
       ])
       .exec();
 
@@ -308,11 +325,16 @@ export class SyllabusService {
         updateSyllabusDto.subjects.map(async (subject) => {
           const chapters = await Promise.all(
             subject.chapters.map(async (chapter) => {
-              let filePath = chapter.filePath || chapter.pdf;
+              const chapterId = new Types.ObjectId(chapter._id);
+              let filePath =
+                chapter.filePath ||
+                `${this.configService.get('UPLOAD_URL')}/${schoolId}/syllabus/${id}/${subject.subject}/${chapterId}.${chapter.pdf}`;
               return {
-                _id: new Types.ObjectId(chapter._id),
+                _id: chapterId,
                 chapterName: chapter.name,
                 filePath,
+                description: chapter.description,
+                hours: chapter.hours
               };
             }),
           );
