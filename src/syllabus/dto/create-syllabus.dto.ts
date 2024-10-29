@@ -8,6 +8,11 @@ class ChapterDto {
     @IsNotEmpty()
     name: string;
 
+    @ApiProperty({ description: 'Description of the chapter' })
+    @IsString()
+    @IsOptional()
+    chapterDescription?: string;
+
     @ApiProperty({ description: 'Base64 encoded PDF file for the chapter' })
     @IsBase64()
     pdf: string; // Base64 encoded PDF file

@@ -16,6 +16,11 @@ class UpdateChapterDto {
     @IsOptional()
     pdf?: string;
 
+    @ApiProperty({ description: 'Description of the chapter' })
+    @IsString()
+    @IsOptional()
+    chapterDescription?: string;
+
     @ApiProperty({ description: 'File path of the existing PDF' })
     @IsString()
     @IsOptional()

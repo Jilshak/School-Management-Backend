@@ -8,6 +8,7 @@ class Chapter {
   @Prop({ required: true,type:String })
   chapterName: string;
 
+
   @Prop({ required: true,type:String })
   filePath: string;
 

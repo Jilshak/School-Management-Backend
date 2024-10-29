@@ -326,12 +326,13 @@ export class SyllabusService {
           const chapters = await Promise.all(
             subject.chapters.map(async (chapter) => {
               const chapterId = new Types.ObjectId(chapter._id);
-              let filePath =
+              const filePath =
                 chapter.filePath ||
                 `${this.configService.get('UPLOAD_URL')}/${schoolId}/syllabus/${id}/${subject.subject}/${chapterId}.${chapter.pdf}`;
               return {
                 _id: chapterId,
                 chapterName: chapter.name,
+                chapterDescription: chapter.chapterDescription || '',
                 filePath,
                 description: chapter.description,
                 hours: chapter.hours
