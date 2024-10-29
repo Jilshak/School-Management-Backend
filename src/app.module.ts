@@ -43,6 +43,7 @@ import { WorkDoneBookModule } from './workdonebook/workdonebook.module';
 import { ClassDailyRecordModule } from './classdailyrecord/classdailyrecord.module';
 import { HolidaysModule } from './holidays/holidays.module';
 import { LessonPlanModule } from './lessonplan/lessonplan.module';
+import { IsHaveFileAccessModule } from './is-have-file-access/is-have-file-access.module';
 
 @Module({
   imports: [
@@ -95,6 +96,7 @@ import { LessonPlanModule } from './lessonplan/lessonplan.module';
     ClassDailyRecordModule,
     HolidaysModule,
     LessonPlanModule,
+    IsHaveFileAccessModule,
   ],
   providers:[PaymentDueCron, NotificationService, WhatsAppService,SalaryDueCron],
   controllers: []

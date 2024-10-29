@@ -1,6 +1,6 @@
 import { PartialType } from "@nestjs/swagger";
 import { CreateSyllabusDto } from "./create-syllabus.dto";
-import { IsOptional, IsString, IsArray, ValidateNested, IsBase64, IsMongoId } from 'class-validator';
+import { IsOptional, IsString, IsArray, ValidateNested, IsBase64, IsMongoId, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { Types } from 'mongoose';
@@ -25,6 +25,16 @@ class UpdateChapterDto {
     @IsMongoId()
     @IsOptional()
     _id?: string;
+
+    @ApiProperty({ description: 'Description of the chapter' })
+    @IsString()
+    @IsOptional()
+    description: string;
+
+    @ApiProperty({ description: 'Hours of the chapter' })
+    @IsNumber()
+    @IsOptional()
+    hours: number;
 }
 
 class UpdateSubjectDto {

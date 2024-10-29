@@ -17,13 +17,14 @@ import { Subject } from 'src/domains/schema/subject.schema';
 import { Classroom } from 'src/domains/schema/classroom.schema';
 import { CustomError } from '../common/errors/custom-error';
 import { HttpStatus } from '@nestjs/common';
-import { FileUploadUtil } from 'src/utils/file-upload.util';
 import { WhatsAppService } from 'src/notification/whatsapp.service';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class UserService {
   constructor(
+    private configService: ConfigService,
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Student.name) private studentModel: Model<Student>,
     @InjectModel(Staff.name) private staffModel: Model<Staff>,
@@ -89,36 +90,12 @@ export class UserService {
     return { username, password };
   }
 
-  private async uploadDocuments(savedUser: User, userDto: CreateUserDto | UpdateUserDto): Promise<Record<string, string | null>> {
-    // const documentTypes = [
-    //   'profilePhoto',
-    //   'adhaarDocument',
-    //   'birthCertificateDocument',
-    //   'pancardDocument',
-    //   'tcDocument'
-    // ];
 
-    const uploadedDocuments: Record<string, string | null> = {};
-
-    for (const docType of userDto.updatedFiles) {
-      if (userDto[docType]) {
-        uploadedDocuments[docType] = await FileUploadUtil.uploadBase64File(
-          userDto[docType],
-          `${savedUser.username}_${docType}`,
-          savedUser.username
-        );
-      } else {
-        uploadedDocuments[docType] = null;
-      }
-    }
-
-    return uploadedDocuments;
-  }
 
   async create(
     createUserDto: CreateUserDto,
     schoolId?: Types.ObjectId,
-  ): Promise<string> {
+  ){
     let session: ClientSession | null = null;
     try {
       const supportsTransactions = await this.supportsTransactions();
@@ -138,7 +115,6 @@ export class UserService {
         );
       }
      
-
       // Handle STUDENT role
       if (createUserDto.roles.includes(UserRole.STUDENT)) {
         createUserDto.roles = [UserRole.STUDENT];
@@ -178,17 +154,30 @@ export class UserService {
       });
 
       const savedUser = await createdUser.save({ session });
-      const uploadedDocuments = await this.uploadDocuments(savedUser, createUserDto);
-
+      if(createUserDto.profilePhoto){
+        createUserDto.profilePhoto = `${this.configService.get<string>('UPLOAD_URL')}/${schoolId}/users/${savedUser._id}/profile.${createUserDto.profilePhoto}`
+      }
+      if(createUserDto.adhaarDocument){
+        createUserDto.adhaarDocument = `${this.configService.get<string>('UPLOAD_URL')}/${schoolId}/users/${savedUser._id}/adhaar.${createUserDto.adhaarDocument}`
+      }
+      if(createUserDto.pancardDocument){
+        createUserDto.pancardDocument = `${this.configService.get<string>('UPLOAD_URL')}/${schoolId}/users/${savedUser._id}/pancard.${createUserDto.pancardDocument}`
+      }
+      if(createUserDto.tcDocument){
+        createUserDto.tcDocument = `${this.configService.get<string>('UPLOAD_URL')}/${schoolId}/users/${savedUser._id}/tc.${createUserDto.tcDocument}`
+      }
+      if(createUserDto.birthCertificateDocument){
+        createUserDto.birthCertificateDocument = `${this.configService.get<string>('UPLOAD_URL')}/${schoolId}/users/${savedUser._id}/birthCertificate.${createUserDto.birthCertificateDocument}`
+      }
       // Create role-specific documents
       if (!savedUser.roles.includes(UserRole.STUDENT)) {
-        await this.createStaffDocument(savedUser, createUserDto, session, uploadedDocuments);
+        await this.createStaffDocument(savedUser, createUserDto, session);
       }
       if (savedUser.roles.includes(UserRole.TEACHER)) {
         await this.createTeacherDocument(savedUser, createUserDto, session);
       }
       if (savedUser.roles.includes(UserRole.STUDENT)) {
-        await this.createStudentDocument(savedUser, createUserDto, session, uploadedDocuments);
+        await this.createStudentDocument(savedUser, createUserDto, session);
       }
 
       if (session) {
@@ -198,7 +187,7 @@ export class UserService {
       // Send WhatsApp messages with username and password
       await this.sendCredentialsViaWhatsApp(createUserDto, username, password);
 
-      return 'User Created';
+      return savedUser;
     } catch (error) {
       if (session) {
         await session.abortTransaction();
@@ -242,8 +231,7 @@ export class UserService {
   private async createStaffDocument(
     user: User,
     dto: CreateUserDto,
-    session: ClientSession | null,
-    uploadedDocuments: any
+    session: ClientSession | null
   ) {
     const staffData = {
       userId: user._id,
@@ -266,9 +254,9 @@ export class UserService {
       pancardNumber: dto.pancardNumber,
       emergencyContactName: dto.emergencyContactName,
       emergencyContactNumber: dto.emergencyContactNumber,
-      profilePhoto: uploadedDocuments.profilePhoto,
-      pancardDocument: uploadedDocuments.pancardDocument,
-      adhaarDocument: uploadedDocuments.adhaarDocument
+      profilePhoto: dto.profilePhoto,
+      pancardDocument: dto.pancardDocument,
+      adhaarDocument: dto.adhaarDocument
     };
     const createdStaff = new this.staffModel(staffData);
     await createdStaff.save({ session });
@@ -296,8 +284,7 @@ export class UserService {
   private async createStudentDocument(
     user: User,
     dto: CreateUserDto,
-    session: ClientSession | null,
-    uploadedDocuments: any
+    session: ClientSession | null
   ) {
     try {
       const studentData = {
@@ -320,12 +307,12 @@ export class UserService {
         adhaarNumber: dto.adhaarNumber,
         emergencyContactName: dto.emergencyContactName,
         emergencyContactNumber: dto.emergencyContactNumber,
-        adhaarDocument: uploadedDocuments.adhaarDocument,
+        adhaarDocument: dto.adhaarDocument,
         state: dto.state,
-        birthCertificateDocument: uploadedDocuments.birthCertificateDocument,
+        birthCertificateDocument: dto.birthCertificateDocument,
         tcNumber: dto.tcNumber,
         tcDocument: dto.tcDocument,
-        profilePhoto: uploadedDocuments.profilePhoto
+        profilePhoto: dto.profilePhoto
       };
       const createdStudent = new this.studentModel(studentData);
       await createdStudent.save({ session });
@@ -684,16 +671,15 @@ export class UserService {
         );
       }
 
-      const uploadedDocuments = await this.uploadDocuments(updatedUser, updateUserDto);
       // Update role-specific documents
       if (!updatedUser.roles.includes(UserRole.STUDENT)) {
-        await this.updateStaffDocument(updatedUser, updateUserDto, session, uploadedDocuments);
+        await this.updateStaffDocument(updatedUser, updateUserDto, session);
       }
       if (updatedUser.roles.includes(UserRole.TEACHER)) {
         await this.updateTeacherDocument(updatedUser, updateUserDto, session);
       }
       if (updatedUser.roles.includes(UserRole.STUDENT)) {
-        await this.updateStudentDocument(updatedUser, updateUserDto, session, uploadedDocuments);
+        await this.updateStudentDocument(updatedUser, updateUserDto, session);
       }
 
       if (session) {
@@ -758,8 +744,7 @@ export class UserService {
   private async updateStaffDocument(
     user: User,
     dto: UpdateUserDto,
-    session: ClientSession | null,
-    uploadedDocuments: Record<string, string | null>
+    session: ClientSession | null
   ) {
     const staffData = {
       userId: user._id,
@@ -783,9 +768,9 @@ export class UserService {
       pancardNumber: dto.pancardNumber,
       emergencyContactName: dto.emergencyContactName,
       emergencyContactNumber: dto.emergencyContactNumber,
-      pancardDocument: uploadedDocuments.pancardDocument,
-      adhaarDocument: uploadedDocuments.adhaarDocument,
-      profilePhoto: uploadedDocuments.profilePhoto
+      pancardDocument: dto.pancardDocument,
+      adhaarDocument: dto.adhaarDocument,
+      profilePhoto: dto.profilePhoto
     };
     await this.staffModel.findOneAndUpdate(
       { userId: user._id },
@@ -813,8 +798,7 @@ export class UserService {
   private async updateStudentDocument(
     user: User,
     dto: UpdateUserDto,
-    session: ClientSession | null,
-    uploadedDocuments: Record<string, string | null>
+    session: ClientSession | null
   ) {
     const studentData = {
       userId: user._id,
@@ -835,10 +819,10 @@ export class UserService {
       adhaarNumber: dto.adhaarNumber,
       emergencyContactName: dto.emergencyContactName,
       emergencyContactNumber: dto.emergencyContactNumber,
-      adhaarDocument: uploadedDocuments.adhaarDocument,
+      adhaarDocument: dto.adhaarDocument,
       state: dto.state,
-      birthCertificateDocument: uploadedDocuments.birthCertificateDocument,
-      profilePhoto: uploadedDocuments.profilePhoto,
+      birthCertificateDocument: dto.birthCertificateDocument,
+      profilePhoto: dto.profilePhoto,
       tcNumber: dto.tcNumber,
       tcDocument: dto.tcDocument,
     };

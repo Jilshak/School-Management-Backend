@@ -46,12 +46,12 @@ async function bootstrap() {
   app.use(json({ limit: '5mb' }));
   app.use(urlencoded({ extended: true, limit: '5mb' }));
 
-  // Serve static files from the 'uploads' directory
-  const uploadPath = join(__dirname, '..', '..', 'uploads');
-  app.use('/uploads', express.static(uploadPath, {
-    index: false,
-    fallthrough: false,
-  }));
+  // // Serve static files from the 'uploads' directory
+  // const uploadPath = join(__dirname, '..', '..', 'uploads');
+  // app.use('/uploads', express.static(uploadPath, {
+  //   index: false,
+  //   fallthrough: false,
+  // }));
 
   await app.listen(3000);
 }
