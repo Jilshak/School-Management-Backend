@@ -1045,10 +1045,19 @@ export class AttendanceService {
               month: { $month: '$attendanceDate' },
             },
             totalDays: { $sum: 1 },
-            presentDays: {
+            fullPresentDays: {
               $sum: {
                 $cond: [
-                  { $in: ['$studentsAttendance.status', ['present', 'halfday']] },
+                  { $eq: ['$studentsAttendance.status', 'present'] },
+                  1,
+                  0,
+                ],
+              },
+            },
+            halfDays: {
+              $sum: {
+                $cond: [
+                  { $eq: ['$studentsAttendance.status', 'halfday'] },
                   1,
                   0,
                 ],
@@ -1081,19 +1090,21 @@ export class AttendanceService {
 
       attendanceRecords.forEach((record) => {
         totalDays += record.totalDays;
-        totalPresentDays += record.presentDays;
+        const presentDaysForMonth = record.fullPresentDays + (record.halfDays * 0.5);
+        totalPresentDays += presentDaysForMonth;
 
-        const monthPercentage = (record.presentDays / record.totalDays) * 100;
+        const monthPercentage = (presentDaysForMonth / record.totalDays) * 100;
         monthlyBreakdown.push({
           month: `${record._id.year}-${String(record._id.month).padStart(2, '0')}`,
           percentage: Number(monthPercentage.toFixed(2)),
           totalDays: record.totalDays,
-          presentDays: record.presentDays,
+          presentDays: presentDaysForMonth,
         });
 
-        // Calculate streak
+        // Updated streak calculation - only full present days count for streak
         record.statuses.forEach((status) => {
-          if (status === 'present' || status === 'halfday') {
+          if (status === 'present') {
+            console.log(status, 'status')
             currentStreak++;
             if (currentStreak > streak) {
               streak = currentStreak;
@@ -1110,8 +1121,8 @@ export class AttendanceService {
       return {
         percentage: Number(percentage.toFixed(2)),
         totalDays,
-        presentDays: totalPresentDays,
-        absentDays,
+        presentDays: Number(totalPresentDays.toFixed(1)), // Round to 1 decimal place
+        absentDays: Number(absentDays.toFixed(1)), // Round to 1 decimal place
         streak,
         monthlyBreakdown,
       };

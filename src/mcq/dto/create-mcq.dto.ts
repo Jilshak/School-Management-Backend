@@ -1,6 +1,12 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsArray, IsMongoId, IsNotEmpty, IsNumber, IsString } from "class-validator";
+import { IsArray, IsMongoId, IsNotEmpty, IsNumber, IsString, IsEnum, IsBoolean } from "class-validator";
 import { Types } from "mongoose";
+
+export enum DifficultyLevel {
+    EASY = 'easy',
+    MEDIUM = 'medium',
+    HARD = 'hard'
+}
 
 export class CreateMCQDto {
     @ApiProperty({ description: 'Question of the MCQ' })
@@ -33,4 +39,24 @@ export class CreateMCQDto {
     @IsMongoId()
     @IsNotEmpty()
     chapterId: string | Types.ObjectId;
+
+    @ApiProperty({ description: 'Tags of the MCQ', type: [String] })
+    @IsArray()
+    @IsString({ each: true })
+    @IsNotEmpty({ each: true })
+    tags?: string[];
+    
+    @ApiProperty({ 
+        description: 'Difficulty level of the MCQ', 
+        enum: DifficultyLevel,
+        example: DifficultyLevel.MEDIUM 
+    })
+    @IsEnum(DifficultyLevel)
+    @IsNotEmpty()
+    difficulty?: DifficultyLevel;
+
+    @ApiProperty({ description: 'Flag to check if the MCQ is active', type: Boolean })
+    @IsBoolean()
+    @IsNotEmpty()
+    isActive?: boolean;
 }

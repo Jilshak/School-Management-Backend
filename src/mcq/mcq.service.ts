@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { MCQ } from 'src/domains/schema/mcq.schema';
-import { CreateMCQDto } from './dto/create-mcq.dto';
+import { CreateMCQDto, DifficultyLevel } from './dto/create-mcq.dto';
 import { UpdateMCQDto } from './dto/update-mcq.dto';
 import { Syllabus } from 'src/domains/schema/syllabus.schema';
 
@@ -69,6 +69,9 @@ export class McqService {
             question: 1,
             options: 1,
             correctAnswer: 1,
+            difficulty: 1,
+            tags: 1,
+            isActive: 1,
             syllabusName: { $arrayElemAt: ['$syllabus.syllabusName', 0] },
             subjectName: { $arrayElemAt: ['$subject.name', 0] },
             chapterId: 1,
@@ -101,7 +104,6 @@ export class McqService {
                 },
               },
             },
-            isActive: 1,
             createdBy: 1,
             updatedBy: 1,
             createdAt: 1,
@@ -269,15 +271,22 @@ export class McqService {
       const mcqs = await this.mcqModel.aggregate([
         { $match: { schoolId: new Types.ObjectId(schoolId) } },
         { $match: { chapterId: { $in: chapterId.map(id => new Types.ObjectId(id)) } } },
-        { $sample: { size:parseInt(questionCount+"") } },
-        {$project:{
-          correctAnswer:0,
-        }}
+        { $sample: { size: parseInt(questionCount+"") } },
+        {
+          $project: {
+            _id: 1,
+            question: 1,
+            options: 1,
+            difficulty: 1,
+            tags: 1,
+          }
+        }
       ]);
       return mcqs;
     } catch (err) {
       throw err;
-    }}
+    }
+  }
 
   async getMcqAnswers(mcqId: string[],schoolId: string | Types.ObjectId) {
     try {
